@@ -1,9 +1,6 @@
-import axios from 'axios';
+import axios from "axios";
 
-// 1. USE YOUR SPECIFIC IP ADDRESS HERE
-// Based on your screenshot, your IP is 192.168.1.89
-// This allows phones on your Wi-Fi to "see" the backend.
-const API_BASE_URL = 'http://192.168.1.89:5000'; 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
