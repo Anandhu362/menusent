@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // <--- NEW IMPORT
+import { useNavigate } from 'react-router-dom'; 
 import { Navbar } from '../components/Navbar';
 import apiClient from '../api/apiClient'; 
 import BannerEditor from '../components/BannerEditor'; 
 import RatioSelector from '../components/RatioSelector';
 import { RestaurantList } from '../components/RestaurantList';
+import MetaDataSetup from '../components/MetaDataSetup'; // <--- NEW IMPORT
 
 const Admin = () => {
   // --- STATE MANAGEMENT ---
@@ -30,7 +31,7 @@ const Admin = () => {
 
   // --- HANDLERS ---
   
-  // NEW: Logout Handler
+  // Logout Handler
   const handleLogout = () => {
     localStorage.removeItem("authToken"); // Clear the token
     navigate("/login"); // Redirect to Login page
@@ -98,7 +99,7 @@ const Admin = () => {
     <div className="min-h-screen font-sans" style={{ backgroundColor: colors.bg, color: colors.black }}>
       <Navbar />
 
-      {/* NEW: Logout Button (Fixed Top Right) */}
+      {/* Logout Button (Fixed Top Right) */}
       <div className="fixed top-6 right-6 z-50">
         <button 
           onClick={handleLogout}
@@ -240,12 +241,19 @@ const Admin = () => {
         </div>
       </div>
 
+      {/* --- DIVIDER --- */}
       <div className="flex items-center justify-center gap-4 max-w-4xl mx-auto my-8 opacity-50 px-6">
         <div className="h-px bg-gray-300 w-full"></div>
         <span className="text-gray-400 font-bold uppercase text-sm whitespace-nowrap">Or Update Existing</span>
         <div className="h-px bg-gray-300 w-full"></div>
       </div>
 
+      {/* --- NEW: META DATA SETUP SECTION --- */}
+      <div className="max-w-7xl mx-auto px-6 mb-12">
+         <MetaDataSetup />
+      </div>
+
+      {/* --- EXISTING: BANNER EDITOR SECTION --- */}
       <div className="pb-20">
          <BannerEditor />
       </div>
