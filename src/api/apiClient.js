@@ -1,28 +1,44 @@
-import axios from 'axios';
+import axios from "axios";
 
-// 1. USE YOUR SPECIFIC IP ADDRESS HERE
-// Based on your screenshot, your IP is 192.168.1.89
-// This allows phones on your Wi-Fi to "see" the backend.
-const API_BASE_URL = 'http://192.168.1.89:5000'; 
+// ✅ Use environment variable (IMPORTANT)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+// ✅ Create axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-// NEW: Add a request interceptor to automatically attach the JWT token
+// ✅ Request interceptor (Attach JWT)
 apiClient.interceptors.request.use(
   (config) => {
-    // 1. Grab the token from the browser's storage
     const token = localStorage.getItem("authToken");
 
-    // 2. If a token exists, add it to the Authorization header
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;
   },
+  (error) => Promise.reject(error)
+);
+
+// ✅ Response interceptor (Handle errors globally)
+apiClient.interceptors.response.use(
+  (response) => response,
   (error) => {
+    // 🔐 Handle Unauthorized (Token expired)
+    if (error.response?.status === 401) {
+      console.warn("⚠️ Unauthorized - Logging out");
+
+      localStorage.removeItem("authToken");
+
+      // Optional: redirect to login
+      window.location.href = "/login";
+    }
+
     return Promise.reject(error);
   }
 );
