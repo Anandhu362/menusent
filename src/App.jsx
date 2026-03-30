@@ -7,11 +7,24 @@ import { MenuViewer } from "./components/MenuViewer";
 import Home from "./pages/Home"; 
 import Admin from "./pages/Admin"; 
 import Login from "./pages/Login"; 
-// IMPORT THE GATEKEEPER
 import { ProtectedRoute } from "./components/ProtectedRoute"; 
+
+// Mobile-friendly menu and dashboard pages
+import RestaurantMenu from "./pages/RestaurantMenu";
+import RestaurantDashboard from "./pages/RestaurantDashboard";
+import MenuManagement from "./pages/MenuManagement";
+import TableManagement from "./pages/TableManagement"; 
+import Checkout from "./pages/Checkout"; 
+import RestaurantSettings from "./pages/RestaurantSettings";
+// ✅ NEW: Import the Orders page
+import Orders from "./pages/Orders"; 
 
 // API
 import apiClient from "./api/apiClient";
+
+// Context Providers
+import { CartProvider } from "./context/CartContext";
+import { AuthProvider } from "./context/AuthContext";
 
 const MenuExperience = () => {
   const { slug } = useParams(); 
@@ -78,27 +91,84 @@ const MenuExperience = () => {
 function App() {
   return (
     <div className="relative min-h-screen w-full bg-background">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          
-          {/* LOGIN ROUTE */}
-          <Route path="/login" element={<Login />} />
+      <AuthProvider>
+        <CartProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              
+              {/* LOGIN ROUTE */}
+              <Route path="/login" element={<Login />} />
+              
+              {/* RESTAURANT OWNER DASHBOARD ROUTES */}
+              <Route 
+                path="/restaurant/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <RestaurantDashboard />
+                  </ProtectedRoute>
+                } 
+              />
 
-          {/* PROTECTED ADMIN ROUTE */}
-          {/* This logic says: "Try to show Admin. But first, run ProtectedRoute." */}
-          <Route 
-            path="/admin" 
-            element={
-              <ProtectedRoute>
-                <Admin />
-              </ProtectedRoute>
-            } 
-          />
+              {/* ✅ NEW: Protected Orders Route */}
+              <Route 
+                path="/restaurant/orders" 
+                element={
+                  <ProtectedRoute>
+                    <Orders />
+                  </ProtectedRoute>
+                } 
+              />
 
-          <Route path="/:slug" element={<MenuExperience />} />
-        </Routes>
-      </BrowserRouter>
+              <Route 
+                path="/restaurant/menu-management" 
+                element={
+                  <ProtectedRoute>
+                    <MenuManagement />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/restaurant/tables" 
+                element={
+                  <ProtectedRoute>
+                    <TableManagement />
+                  </ProtectedRoute>
+                } 
+              /> 
+              
+              {/* Restaurant Settings Route */}
+              <Route 
+                path="/restaurant/settings" 
+                element={
+                  <ProtectedRoute>
+                    <RestaurantSettings />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* PROTECTED ADMIN ROUTE */}
+              <Route 
+                path="/admin" 
+                element={
+                  <ProtectedRoute>
+                    <Admin />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* Checkout route */}
+              <Route path="/checkout" element={<Checkout />} />
+
+              {/* Mobile-friendly menu route */}
+              <Route path="/:slug/menu" element={<RestaurantMenu />} />
+
+              {/* 3D Menu Experience route */}
+              <Route path="/:slug" element={<MenuExperience />} />
+            </Routes>
+          </BrowserRouter>
+        </CartProvider>
+      </AuthProvider>
     </div>
   );
 }
