@@ -18,41 +18,54 @@ const Orders = () => {
 
   // --- 1. INITIAL FETCH & REAL-TIME SOCKET CONNECTION ---
   useEffect(() => {
-    if (!restaurantId) return;
+  if (!restaurantId) return;
 
-    const fetchInitialOrders = async () => {
-      try {
-        const data = await getRestaurantOrders(restaurantId);
-        setOrders(data);
-      } catch (error) {
-        console.error("Failed to fetch orders:", error);
-      } finally {
-        setLoading(false);
+  const fetchInitialOrders = async () => {
+    try {
+      const data = await getRestaurantOrders(restaurantId);
+      setOrders(data);
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchInitialOrders();
+
+  // ✅ FIXED: Use correct env variable
+  const SOCKET_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
+
+  const socket = io(SOCKET_URL, {
+    transports: ["websocket"],
+  });
+
+  socket.on("connect", () => {
+    console.log("✅ Connected to socket:", socket.id);
+  });
+
+  socket.on("receiveNewOrder", (newOrder) => {
+    if (newOrder.restaurantId === restaurantId) {
+
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(err => {
+          console.warn("Audio blocked until user interaction", err);
+        });
       }
-    };
-    fetchInitialOrders();
 
-    const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000");
+      setOrders((prevOrders) => [newOrder, ...prevOrders]);
+    }
+  });
 
-    socket.on("receiveNewOrder", (newOrder) => {
-      if (newOrder.restaurantId === restaurantId) {
-        
-        // ✅ FIX 2: Safely trigger the HTML audio element
-        if (audioRef.current) {
-          audioRef.current.currentTime = 0; // Reset audio to start so it can play rapidly
-          audioRef.current.play().catch(err => {
-            console.warn("Browser blocked audio. The user must click anywhere on the page first before sound can play.", err);
-          });
-        }
-        
-        setOrders((prevOrders) => [newOrder, ...prevOrders]);
-      }
-    });
+  socket.on("disconnect", () => {
+    console.log("❌ Socket disconnected");
+  });
 
-    return () => {
-      socket.disconnect();
-    };
-  }, [restaurantId]);
+  return () => {
+    socket.disconnect();
+  };
+
+}, [restaurantId]);
 
   // --- 2. UPDATE STATUS HANDLER ---
   const handleStatusChange = async (orderId, newStatus) => {
