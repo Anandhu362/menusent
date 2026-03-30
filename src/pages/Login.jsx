@@ -1,14 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
-import apiClient from "../api/apiClient"; // Import your API client
+import apiClient from "../api/apiClient"; 
+import { useAuth } from "../context/AuthContext"; // <-- NEW: Import the global auth context
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false); // Added loading state
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // <-- NEW: Extract login and logout from Context
+  const { login, logout } = useAuth();
+
+  // Clear any existing/expired tokens when the login page loads
+  useEffect(() => {
+    logout(); // <-- UPDATED: Use context logout instead of manual localStorage
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -16,23 +25,35 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Call the Backend API
-      const response = await apiClient.post("/api/auth/login", {
-        email,
-        password
-      });
+      let token = null;
 
-      // If successful:
-      // 1. Store the token (response.data.token comes from the controller)
-      localStorage.setItem("authToken", response.data.token);
+      // ✅ SMART LOGIN FLOW: 
+      // First, try to log in as a Restaurant Owner
+      try {
+        const response = await apiClient.post("/api/auth/restaurant-login", {
+          email,
+          password
+        });
+        token = response.data.token;
+      } catch (restaurantError) {
+        // If restaurant login fails, fallback and try Super Admin login
+        const response = await apiClient.post("/api/auth/login", {
+          email,
+          password
+        });
+        token = response.data.token;
+      }
+
+      // 1. Store the new JWT token securely using our AuthContext
+      login(token);
       
-      // 2. Navigate to Admin Dashboard
-      navigate("/admin");
+      // 2. Navigate to Admin Dashboard 
+      navigate("/restaurant/dashboard");
 
     } catch (err) {
-      // Handle Errors
+      // Handle Errors (This only runs if BOTH restaurant and admin logins fail)
       console.error("Login failed:", err);
-      const errorMessage = err.response?.data?.message || "Login failed. Please try again.";
+      const errorMessage = err.response?.data?.message || "Login failed. Please check your credentials.";
       setError(errorMessage);
     } finally {
       setLoading(false);
