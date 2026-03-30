@@ -20,9 +20,6 @@ import { useAuth } from "../context/AuthContext";
 
 // 3. IMPORT SOCKET.IO FOR REAL-TIME UPDATES
 import { io } from "socket.io-client";
-// NOTE: Make sure this points to your actual backend URL. 
-// You can also import API_BASE_URL from your apiClient.js if you have it exported there.
-const SOCKET_URL = "http://192.168.1.89:5000"; 
 
 // --- HELPERS ---
 const timeAgo = (dateString) => {
@@ -119,17 +116,23 @@ const RestaurantDashboard = () => {
     if (!user) return;
 
     const targetRestaurantId = user?.restaurantId || user?._id;
-    const socket = io(SOCKET_URL);
+
+    // ✅ FIX: Use env variable instead of hardcoded IP
+    const SOCKET_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
+
+    const socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+    });
 
     socket.on("connect", () => {
-      console.log("Dashboard connected to Socket.io:", socket.id);
+      console.log("✅ Dashboard connected to Socket:", socket.id);
     });
 
     // Listen for new orders matching our backend emission
     socket.on("receiveNewOrder", (newOrder) => {
       // Security Check: Only update if the order belongs to this restaurant
       if (newOrder.restaurantId === targetRestaurantId) {
-        console.log("Real-time order received on Dashboard:", newOrder);
+        console.log("🔥 Real-time order received:", newOrder);
 
         // 1. Update Metrics dynamically
         setMetrics((prev) => {
@@ -147,10 +150,14 @@ const RestaurantDashboard = () => {
 
         // 2. Add new order to the top of the recent orders list (keeping max 5)
         setRecentOrders((prev) => {
-          const updatedList = [newOrder, ...prev];
-          return updatedList.slice(0, 5);
+          const updated = [newOrder, ...prev];
+          return updated.slice(0, 5);
         });
       }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("❌ Socket disconnected");
     });
 
     // Cleanup socket on component unmount
