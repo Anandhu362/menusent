@@ -34,7 +34,7 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
     }
   }
 
-  // ✅ NEW: Determine Stock Status
+  // Determine Stock Status
   // If currentStock is undefined, it assumes legacy item (in stock)
   const stockAmount = item.currentStock;
   const hasStockData = stockAmount !== undefined;
@@ -52,7 +52,7 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
         <img 
           src={imageUrl} 
           alt={item.name || "Menu item"} 
-          // ✅ NEW: Grayscale the image if it is out of stock
+          // Grayscale the image if it is out of stock
           className={`w-full h-full object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale opacity-60' : 'hover:scale-110'}`}
           onError={(e) => {
             e.target.onerror = null; 
@@ -60,17 +60,13 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
           }}
         />
         
-        {/* ✅ NEW: Dynamic Stock Badge / Sold Out Overlay */}
+        {/* Dynamic Stock Badge / Sold Out Overlay */}
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end">
-          {isOutOfStock ? (
+          {isOutOfStock && (
             <span className="bg-red-500/90 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm backdrop-blur-sm">
               Sold Out
             </span>
-          ) : hasStockData ? (
-            <span className="bg-orange-100/95 text-[#ff6b35] border border-orange-200/50 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm backdrop-blur-sm">
-              {stockAmount} Left
-            </span>
-          ) : null}
+          )}
         </div>
         
         {/* Rating Overlay */}
@@ -108,7 +104,7 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
             </span>
           </div>
 
-          {/* ✅ NEW: Disabled Add to Cart Button if out of stock */}
+          {/* Disabled Add to Cart Button if out of stock */}
           <button 
             disabled={isOutOfStock}
             onClick={() => {
