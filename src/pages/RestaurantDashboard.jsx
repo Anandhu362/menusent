@@ -51,6 +51,7 @@ const MetricCard = ({ title, value, icon: Icon, trend }) => (
   </div>
 );
 
+// ✅ UPDATED: Sleek, premium, compact status badges
 const StatusBadge = ({ status }) => {
   const styles = {
     Pending: "bg-gray-100 text-gray-800",
@@ -59,7 +60,7 @@ const StatusBadge = ({ status }) => {
     Cancelled: "bg-red-100 text-red-800",
   };
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || 'bg-gray-100'}`}>
+    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase ${styles[status] || 'bg-gray-100'}`}>
       {status}
     </span>
   );
@@ -213,52 +214,67 @@ const RestaurantDashboard = () => {
                   <div className="overflow-auto flex-1 hide-scrollbar">
                     <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
                     <table className="w-full text-left border-collapse min-w-[700px]">
-                      <thead className="sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10">
-                        <tr className="text-xs uppercase tracking-wider font-semibold text-gray-500 border-b border-gray-100">
-                          <th className="px-8 py-4">Order ID</th>
-                          <th className="px-6 py-4">Items Summary</th>
-                          <th className="px-6 py-4">Amount</th>
-                          <th className="px-6 py-4">Status</th>
-                          <th className="px-6 py-4 text-right">Time</th>
+                      
+                      {/* ✅ UPDATED: Header spacing and text size */}
+                      <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+                        <tr className="text-[10px] uppercase tracking-widest font-bold text-gray-400 border-b border-gray-100">
+                          <th className="px-8 py-3">Order ID</th>
+                          <th className="px-6 py-3">Items Summary</th>
+                          <th className="px-6 py-3">Amount</th>
+                          <th className="px-6 py-3">Status</th>
+                          <th className="px-6 py-3 text-right">Time</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+
+                      <tbody className="divide-y divide-gray-50">
                         {recentOrders.length === 0 ? (
                           <tr>
-                            <td colSpan="5" className="text-center py-8 text-gray-500">No recent orders found.</td>
+                            <td colSpan="5" className="text-center py-8 text-gray-500 text-sm">No recent orders found.</td>
                           </tr>
                         ) : (
                           recentOrders.map((order) => (
-                            <tr key={order._id} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="px-8 py-4 font-bold text-[#ff6b35] whitespace-nowrap">{order.orderId}</td>
-                              <td className="px-6 py-4">
-                                <div className="flex flex-col gap-2 min-w-[200px]">
+                            <tr key={order._id} className="hover:bg-gray-50/50 transition-colors group">
+                              
+                              {/* ✅ UPDATED: Padding decreased to py-3, text to xs */}
+                              <td className="px-8 py-3 font-bold text-[#ff6b35] whitespace-nowrap text-xs">
+                                {order.orderId}
+                              </td>
+                              
+                              <td className="px-6 py-3">
+                                <div className="flex flex-col gap-1 min-w-[200px]">
                                   {order.items.slice(0, 2).map((item, index) => (
-                                    <div key={index} className="flex items-center gap-3">
-                                      <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold border border-gray-200 uppercase">
+                                    <div key={index} className="flex items-center gap-2">
+                                      {/* ✅ UPDATED: Mini item avatars */}
+                                      <div className="h-5 w-5 rounded bg-gray-50 flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-100 uppercase group-hover:border-gray-200 transition-colors">
                                         {item.name.charAt(0)}
                                       </div>
                                       <div>
-                                        <p className="text-sm font-semibold text-slate-800 leading-none">{item.name}</p>
+                                        <p className="text-xs font-medium text-slate-600 leading-none">{item.name}</p>
                                       </div>
                                     </div>
                                   ))}
                                   {order.items.length > 2 && (
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide ml-11">
-                                      +{order.items.length - 2} more
+                                    <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-widest ml-7 mt-0.5">
+                                      +{order.items.length - 2} more items
                                     </span>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
+                              
+                              {/* ✅ UPDATED: Text size and styling */}
+                              <td className="px-6 py-3 font-bold text-slate-800 whitespace-nowrap text-xs">
                                 {currency} {order.totalAmount.toFixed(2)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              
+                              <td className="px-6 py-3 whitespace-nowrap">
                                 <StatusBadge status={order.orderStatus} />
                               </td>
-                              <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap">
+                              
+                              {/* ✅ UPDATED: Time size to 11px and lighter color */}
+                              <td className="px-6 py-3 text-right text-[11px] text-gray-400 whitespace-nowrap font-medium">
                                 {timeAgo(order.createdAt || new Date())}
                               </td>
+
                             </tr>
                           ))
                         )}
