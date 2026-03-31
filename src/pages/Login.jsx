@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import apiClient from "../api/apiClient"; 
-import { useAuth } from "../context/AuthContext"; // <-- NEW: Import the global auth context
+// ✅ NEW: Import decodeJWT alongside useAuth
+import { useAuth, decodeJWT } from "../context/AuthContext"; 
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -11,12 +12,11 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // <-- NEW: Extract login and logout from Context
   const { login, logout } = useAuth();
 
   // Clear any existing/expired tokens when the login page loads
   useEffect(() => {
-    logout(); // <-- UPDATED: Use context logout instead of manual localStorage
+    logout(); 
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogin = async (e) => {
@@ -46,9 +46,18 @@ const Login = () => {
 
       // 1. Store the new JWT token securely using our AuthContext
       login(token);
-      
-      // 2. Navigate to Admin Dashboard 
-      navigate("/restaurant/dashboard");
+
+      // ✅ 2. Decode the token to check the user role instantly
+      const decodedUser = decodeJWT(token);
+
+      // ✅ 3. Smart routing based on role
+      if (decodedUser?.role === 'admin') {
+        // Super Admins go to the Restaurant Management List
+        navigate("/restaurant/settings");
+      } else {
+        // Restaurant Owners go directly to their Sales Dashboard
+        navigate("/restaurant/dashboard");
+      }
 
     } catch (err) {
       // Handle Errors (This only runs if BOTH restaurant and admin logins fail)
