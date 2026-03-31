@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { createRestaurant } from "../api/restaurant.api"; 
 import toast from 'react-hot-toast'; 
-import { UploadCloud, Store, MapPin, X, Image as ImageIcon } from 'lucide-react'; // Added icons
+import { UploadCloud, Store, MapPin, X, Image as ImageIcon, Mail, Lock } from 'lucide-react'; // Added Mail and Lock icons
 
 const AddRestaurantModal = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [logoFile, setLogoFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,7 +27,7 @@ const AddRestaurantModal = ({ isOpen, onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!name || !location || !logoFile) {
+    if (!name || !location || !email || !password || !logoFile) {
       toast.error("Please fill in all fields and upload a logo.");
       return;
     }
@@ -36,14 +38,19 @@ const AddRestaurantModal = ({ isOpen, onClose, onSuccess }) => {
       const formData = new FormData();
       formData.append('name', name);
       formData.append('location', location);
+      formData.append('email', email);       // Send email to backend
+      formData.append('password', password); // Send password to backend
       formData.append('logo', logoFile);
 
       const result = await createRestaurant(formData);
 
       toast.success("Restaurant created successfully!");
       
+      // Reset form
       setName('');
       setLocation('');
+      setEmail('');
+      setPassword('');
       setLogoFile(null);
       
       onSuccess(result.restaurant); 
@@ -58,6 +65,7 @@ const AddRestaurantModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4">
+      <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
         
         {/* Header */}
@@ -74,8 +82,8 @@ const AddRestaurantModal = ({ isOpen, onClose, onSuccess }) => {
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
+        {/* Form Body - Made scrollable for smaller screens */}
+        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5 max-h-[75vh] overflow-y-auto hide-scrollbar">
           
           {/* Custom Name Input */}
           <div>
@@ -111,6 +119,47 @@ const AddRestaurantModal = ({ isOpen, onClose, onSuccess }) => {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="e.g., Karnataka India"
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:bg-white focus:border-orange-500 rounded-xl text-slate-700 font-medium placeholder-gray-400 outline-none transition-all shadow-sm"
+                required
+              />
+            </div>
+          </div>
+
+          {/* NEW: Custom Email Input */}
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">
+              Login Email
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="e.g., admin@restaurant.com"
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:bg-white focus:border-orange-500 rounded-xl text-slate-700 font-medium placeholder-gray-400 outline-none transition-all shadow-sm"
+                required
+              />
+            </div>
+          </div>
+
+          {/* NEW: Custom Password Input */}
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">
+              Login Password
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+                minLength={6}
                 className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:bg-white focus:border-orange-500 rounded-xl text-slate-700 font-medium placeholder-gray-400 outline-none transition-all shadow-sm"
                 required
               />
