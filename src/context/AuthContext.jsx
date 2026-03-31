@@ -3,29 +3,29 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 // 1. Create the Context
 const AuthContext = createContext();
 
+// ✅ NEW: Export decodeJWT so other files (like Login.jsx) can use it instantly
+export const decodeJWT = (tokenStr) => {
+  try {
+    const base64Url = tokenStr.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Failed to decode token", error);
+    return null;
+  }
+};
+
 // 2. Create the Provider Component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('authToken') || null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Safely decode the JWT token without needing external npm packages
-  const decodeJWT = (tokenStr) => {
-    try {
-      const base64Url = tokenStr.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (error) {
-      console.error("Failed to decode token", error);
-      return null;
-    }
-  };
 
   // Run this every time the app loads or the token changes
   useEffect(() => {
