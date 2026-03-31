@@ -11,7 +11,6 @@ import {
 
 // 1. IMPORT SIDEBAR AND WIDGET COMPONENTS
 import { AdminSidebar } from "../components/AdminSidebar";
-import { TableStatus } from "../components/TableStatus";
 import { SalesSummary } from "../components/SalesSummary";
 
 // 2. IMPORT API AND AUTH CONTEXT
@@ -75,14 +74,13 @@ const RestaurantDashboard = () => {
   const [currency, setCurrency] = useState('AED');
   const [isLoading, setIsLoading] = useState(true);
 
-  // ✅ Extract the user from AuthContext
+  // Extract the user from AuthContext
   const { user } = useAuth();
 
   // --- 1. DATA FETCHING (Runs on load) ---
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Look for restaurantId or fallback to _id depending on your token structure
         const targetRestaurantId = user?.restaurantId || user?._id;
         
         if (!targetRestaurantId) {
@@ -104,7 +102,6 @@ const RestaurantDashboard = () => {
       }
     };
 
-    // Only attempt to load if the user object is ready
     if (user) {
       loadDashboardData();
     }
@@ -112,12 +109,10 @@ const RestaurantDashboard = () => {
 
   // --- 2. REAL-TIME SOCKET CONNECTION ---
   useEffect(() => {
-    // Only connect if we have a logged-in user
     if (!user) return;
 
     const targetRestaurantId = user?.restaurantId || user?._id;
 
-    // ✅ FIX: Use env variable instead of hardcoded IP
     const SOCKET_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
 
     const socket = io(SOCKET_URL, {
@@ -128,13 +123,10 @@ const RestaurantDashboard = () => {
       console.log("✅ Dashboard connected to Socket:", socket.id);
     });
 
-    // Listen for new orders matching our backend emission
     socket.on("receiveNewOrder", (newOrder) => {
-      // Security Check: Only update if the order belongs to this restaurant
       if (newOrder.restaurantId === targetRestaurantId) {
         console.log("🔥 Real-time order received:", newOrder);
 
-        // 1. Update Metrics dynamically
         setMetrics((prev) => {
           const newTotalOrders = prev.totalOrders + 1;
           const newTotalSales = prev.totalSales + newOrder.totalAmount;
@@ -144,11 +136,10 @@ const RestaurantDashboard = () => {
             totalSales: newTotalSales,
             totalOrders: newTotalOrders,
             avgOrderValue: newAvgValue,
-            currency: prev.currency // keep existing currency
+            currency: prev.currency 
           };
         });
 
-        // 2. Add new order to the top of the recent orders list (keeping max 5)
         setRecentOrders((prev) => {
           const updated = [newOrder, ...prev];
           return updated.slice(0, 5);
@@ -160,7 +151,6 @@ const RestaurantDashboard = () => {
       console.log("❌ Socket disconnected");
     });
 
-    // Cleanup socket on component unmount
     return () => {
       socket.disconnect();
     };
@@ -175,7 +165,6 @@ const RestaurantDashboard = () => {
         <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between sticky top-0 z-20 shadow-sm">
           <h2 className="text-2xl font-bold text-slate-900">Dashboard Overview</h2>
           <div className="flex items-center gap-6">
-            {/* Search and Profile... */}
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100 cursor-pointer group">
                <img src="https://i.pravatar.cc/150?img=12" alt="Admin" className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" />
                <div className="hidden md:block text-sm">
@@ -213,76 +202,70 @@ const RestaurantDashboard = () => {
                 />
               </section>
 
-              {/* SPLIT LAYOUT */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-                <div className="xl:col-span-1 h-[500px]">
-                  <TableStatus />
-                </div>
+              {/* FULL WIDTH RECENT ORDERS LAYOUT */}
+              <div className="mb-6 h-[500px] flex flex-col w-full">
+                <section className="bg-white rounded-[20px] shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full w-full">
+                  <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+                    <h3 className="text-lg font-bold text-slate-900">Recent Orders</h3>
+                    <button className="text-sm font-medium text-[#ff6b35] hover:underline">View All</button>
+                  </div>
 
-                <div className="xl:col-span-2 h-[500px] flex flex-col">
-                  <section className="bg-white rounded-[20px] shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
-                    <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-white z-10">
-                      <h3 className="text-lg font-bold text-slate-900">Recent Orders</h3>
-                      <button className="text-sm font-medium text-[#ff6b35] hover:underline">View All</button>
-                    </div>
-
-                    <div className="overflow-auto flex-1 hide-scrollbar">
-                      <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-                      <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead className="sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10">
-                          <tr className="text-xs uppercase tracking-wider font-semibold text-gray-500 border-b border-gray-100">
-                            <th className="px-8 py-4">Order ID</th>
-                            <th className="px-6 py-4">Items Summary</th>
-                            <th className="px-6 py-4">Amount</th>
-                            <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4 text-right">Time</th>
+                  <div className="overflow-auto flex-1 hide-scrollbar">
+                    <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                      <thead className="sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10">
+                        <tr className="text-xs uppercase tracking-wider font-semibold text-gray-500 border-b border-gray-100">
+                          <th className="px-8 py-4">Order ID</th>
+                          <th className="px-6 py-4">Items Summary</th>
+                          <th className="px-6 py-4">Amount</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-right">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {recentOrders.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="text-center py-8 text-gray-500">No recent orders found.</td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {recentOrders.length === 0 ? (
-                            <tr>
-                              <td colSpan="5" className="text-center py-8 text-gray-500">No recent orders found.</td>
-                            </tr>
-                          ) : (
-                            recentOrders.map((order) => (
-                              <tr key={order._id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-8 py-4 font-bold text-[#ff6b35] whitespace-nowrap">{order.orderId}</td>
-                                <td className="px-6 py-4">
-                                  <div className="flex flex-col gap-2 min-w-[200px]">
-                                    {order.items.slice(0, 2).map((item, index) => (
-                                      <div key={index} className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold border border-gray-200 uppercase">
-                                          {item.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                          <p className="text-sm font-semibold text-slate-800 leading-none">{item.name}</p>
-                                        </div>
+                        ) : (
+                          recentOrders.map((order) => (
+                            <tr key={order._id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-8 py-4 font-bold text-[#ff6b35] whitespace-nowrap">{order.orderId}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-col gap-2 min-w-[200px]">
+                                  {order.items.slice(0, 2).map((item, index) => (
+                                    <div key={index} className="flex items-center gap-3">
+                                      <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold border border-gray-200 uppercase">
+                                        {item.name.charAt(0)}
                                       </div>
-                                    ))}
-                                    {order.items.length > 2 && (
-                                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide ml-11">
-                                        +{order.items.length - 2} more
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
-                                  {currency} {order.totalAmount.toFixed(2)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <StatusBadge status={order.orderStatus} />
-                                </td>
-                                <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap">
-                                  {timeAgo(order.createdAt || new Date())}
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-                </div>
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-800 leading-none">{item.name}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {order.items.length > 2 && (
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide ml-11">
+                                      +{order.items.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
+                                {currency} {order.totalAmount.toFixed(2)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <StatusBadge status={order.orderStatus} />
+                              </td>
+                              <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap">
+                                {timeAgo(order.createdAt || new Date())}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
 
               {/* BOTTOM SECTION */}
