@@ -35,10 +35,7 @@ export const AdminSidebar = () => {
   // Both Admin and Restaurant get Menu Management
   navItems.push({ label: "Menu Management", icon: UtensilsCrossed, path: "/restaurant/menu-management" });
 
-  // Only show Table Management to Restaurant Owners
-  if (user?.role === 'restaurant') {
-    navItems.push({ label: "Table Management", icon: LayoutGrid, path: "/restaurant/tables" });
-  }
+  // TABLE MANAGEMENT HAS BEEN COMPLETELY REMOVED HERE
 
   // ==========================================
   // 2. DYNAMIC SETUP MENU
