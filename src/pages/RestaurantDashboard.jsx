@@ -17,8 +17,20 @@ import { SalesSummary } from "../components/SalesSummary";
 import { fetchDashboardStats } from "../api/order.api";
 import { useAuth } from "../context/AuthContext";
 
-// 3. IMPORT SOCKET.IO FOR REAL-TIME UPDATES
-import { io } from "socket.io-client";
+// 3. IMPORT FIREBASE FOR REAL-TIME UPDATES (Replaced Socket.io)
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
+
+// --- FIREBASE INITIALIZATION ---
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 // --- HELPERS ---
 const timeAgo = (dateString) => {
@@ -51,7 +63,6 @@ const MetricCard = ({ title, value, icon: Icon, trend }) => (
   </div>
 );
 
-// ✅ UPDATED: Sleek, premium, compact status badges
 const StatusBadge = ({ status }) => {
   const styles = {
     Pending: "bg-gray-100 text-gray-800",
@@ -108,52 +119,55 @@ const RestaurantDashboard = () => {
     }
   }, [user]);
 
-  // --- 2. REAL-TIME SOCKET CONNECTION ---
+  // --- 2. REAL-TIME FIREBASE CONNECTION (Replaced Socket.io) ---
   useEffect(() => {
     if (!user) return;
 
     const targetRestaurantId = user?.restaurantId || user?._id;
+    if (!targetRestaurantId) return;
 
-    const SOCKET_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
+    console.log("✅ Dashboard listening to Firebase...");
 
-    const socket = io(SOCKET_URL, {
-      transports: ["websocket"],
+    // Create a reference to this specific restaurant's live-orders node
+    const ordersRef = ref(db, `live-orders/${targetRestaurantId}`);
+    
+    // Listen for NEW orders that happen AFTER this exact moment
+    const now = Date.now();
+    const newOrdersQuery = query(ordersRef, orderByChild('timestamp'), startAt(now));
+
+    // Firebase listener triggers when a new order is pushed
+    const unsubscribe = onChildAdded(newOrdersQuery, (snapshot) => {
+      const newOrder = snapshot.val();
+      console.log("🔥 Real-time order received via Firebase (Dashboard):", newOrder);
+
+      // Update Top Metrics
+      setMetrics((prev) => {
+        const newTotalOrders = prev.totalOrders + 1;
+        const newTotalSales = prev.totalSales + (newOrder.totalAmount || 0);
+        const newAvgValue = newTotalSales / newTotalOrders;
+
+        return {
+          totalSales: newTotalSales,
+          totalOrders: newTotalOrders,
+          avgOrderValue: newAvgValue,
+          currency: prev.currency || currency 
+        };
+      });
+
+      // Update Recent Orders Table (Keep top 5, prevent duplicates)
+      setRecentOrders((prev) => {
+        if (prev.some(o => o.orderId === newOrder.orderId || o._id === newOrder._id)) {
+          return prev;
+        }
+        const updated = [newOrder, ...prev];
+        return updated.slice(0, 5);
+      });
     });
 
-    socket.on("connect", () => {
-      console.log("✅ Dashboard connected to Socket:", socket.id);
-    });
-
-    socket.on("receiveNewOrder", (newOrder) => {
-      if (newOrder.restaurantId === targetRestaurantId) {
-        console.log("🔥 Real-time order received:", newOrder);
-
-        setMetrics((prev) => {
-          const newTotalOrders = prev.totalOrders + 1;
-          const newTotalSales = prev.totalSales + newOrder.totalAmount;
-          const newAvgValue = newTotalSales / newTotalOrders;
-
-          return {
-            totalSales: newTotalSales,
-            totalOrders: newTotalOrders,
-            avgOrderValue: newAvgValue,
-            currency: prev.currency 
-          };
-        });
-
-        setRecentOrders((prev) => {
-          const updated = [newOrder, ...prev];
-          return updated.slice(0, 5);
-        });
-      }
-    });
-
-    socket.on("disconnect", () => {
-      console.log("❌ Socket disconnected");
-    });
-
+    // Cleanup listener on unmount
     return () => {
-      socket.disconnect();
+      unsubscribe();
+      console.log("❌ Firebase listener detached from Dashboard");
     };
   }, [user]);
 
@@ -215,7 +229,6 @@ const RestaurantDashboard = () => {
                     <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
                     <table className="w-full text-left border-collapse min-w-[700px]">
                       
-                      {/* ✅ UPDATED: Header spacing and text size */}
                       <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
                         <tr className="text-[10px] uppercase tracking-widest font-bold text-gray-400 border-b border-gray-100">
                           <th className="px-8 py-3">Order ID</th>
@@ -235,7 +248,6 @@ const RestaurantDashboard = () => {
                           recentOrders.map((order) => (
                             <tr key={order._id} className="hover:bg-gray-50/50 transition-colors group">
                               
-                              {/* ✅ UPDATED: Padding decreased to py-3, text to xs */}
                               <td className="px-8 py-3 font-bold text-[#ff6b35] whitespace-nowrap text-xs">
                                 {order.orderId}
                               </td>
@@ -244,7 +256,6 @@ const RestaurantDashboard = () => {
                                 <div className="flex flex-col gap-1 min-w-[200px]">
                                   {order.items.slice(0, 2).map((item, index) => (
                                     <div key={index} className="flex items-center gap-2">
-                                      {/* ✅ UPDATED: Mini item avatars */}
                                       <div className="h-5 w-5 rounded bg-gray-50 flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-100 uppercase group-hover:border-gray-200 transition-colors">
                                         {item.name.charAt(0)}
                                       </div>
@@ -261,7 +272,6 @@ const RestaurantDashboard = () => {
                                 </div>
                               </td>
                               
-                              {/* ✅ UPDATED: Text size and styling */}
                               <td className="px-6 py-3 font-bold text-slate-800 whitespace-nowrap text-xs">
                                 {currency} {order.totalAmount.toFixed(2)}
                               </td>
@@ -270,7 +280,6 @@ const RestaurantDashboard = () => {
                                 <StatusBadge status={order.orderStatus} />
                               </td>
                               
-                              {/* ✅ UPDATED: Time size to 11px and lighter color */}
                               <td className="px-6 py-3 text-right text-[11px] text-gray-400 whitespace-nowrap font-medium">
                                 {timeAgo(order.createdAt || new Date())}
                               </td>
