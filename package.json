@@ -17,6 +17,7 @@
     "@types/three": "0.152.1",
     "autoprefixer": "^10.4.19",
     "axios": "^1.13.2",
+    "firebase": "^12.11.0",
     "jotai": "^2.8.4",
     "leva": "^0.9.35",
     "lucide-react": "^0.575.0",
