@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import apiClient from "../api/apiClient"; 
-// ✅ NEW: Import decodeJWT alongside useAuth
 import { useAuth, decodeJWT } from "../context/AuthContext"; 
 
 const Login = () => {
@@ -26,43 +25,54 @@ const Login = () => {
 
     try {
       let token = null;
+      let loginSuccess = false;
 
-      // ✅ SMART LOGIN FLOW: 
-      // First, try to log in as a Restaurant Owner
+      // 1. TRY ADMIN LOGIN FIRST (Since you are testing as Admin)
       try {
-        const response = await apiClient.post("/api/auth/restaurant-login", {
+        const adminResponse = await apiClient.post("/api/auth/login", {
           email,
           password
         });
-        token = response.data.token;
-      } catch (restaurantError) {
-        // If restaurant login fails, fallback and try Super Admin login
-        const response = await apiClient.post("/api/auth/login", {
-          email,
-          password
-        });
-        token = response.data.token;
+        if (adminResponse.data.token) {
+          token = adminResponse.data.token;
+          loginSuccess = true;
+        }
+      } catch (adminErr) {
+        // If Admin fails, only then try Restaurant
+        console.log("Not an admin, trying restaurant login...");
       }
 
-      // 1. Store the new JWT token securely using our AuthContext
-      login(token);
+      // 2. FALLBACK TO RESTAURANT LOGIN
+      if (!loginSuccess) {
+        try {
+          const restaurantResponse = await apiClient.post("/api/auth/restaurant-login", {
+            email,
+            password
+          });
+          token = restaurantResponse.data.token;
+          loginSuccess = true;
+        } catch (restaurantErr) {
+          // If both fail, throw the error to the main catch block
+          throw restaurantErr;
+        }
+      }
 
-      // ✅ 2. Decode the token to check the user role instantly
-      const decodedUser = decodeJWT(token);
+      // 3. PROCEED WITH AUTH
+      if (token) {
+        login(token);
+        const decodedUser = decodeJWT(token);
 
-      // ✅ 3. Smart routing based on role
-      if (decodedUser?.role === 'admin') {
-        // Super Admins go to the Restaurant Management List
-        navigate("/restaurant/settings");
-      } else {
-        // Restaurant Owners go directly to their Sales Dashboard
-        navigate("/restaurant/dashboard");
+        // SMART ROUTING
+        if (decodedUser?.role === 'admin') {
+          navigate("/restaurant/settings");
+        } else {
+          navigate("/restaurant/dashboard");
+        }
       }
 
     } catch (err) {
-      // Handle Errors (This only runs if BOTH restaurant and admin logins fail)
-      console.error("Login failed:", err);
-      const errorMessage = err.response?.data?.message || "Login failed. Please check your credentials.";
+      console.error("Login process failed:", err);
+      const errorMessage = err.response?.data?.message || "Invalid email or password.";
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -77,8 +87,8 @@ const Login = () => {
         <div className="bg-white p-8 md:p-12 rounded-[2rem] shadow-xl shadow-gray-200/50 w-full max-w-md">
           
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-black mb-2">Admin Login</h1>
-            <p className="text-gray-400 text-sm">Enter your credentials to access the dashboard.</p>
+            <h1 className="text-3xl font-black mb-2">Login</h1>
+            <p className="text-gray-400 text-sm">Enter your credentials to access your dashboard.</p>
           </div>
 
           {error && (
@@ -118,7 +128,6 @@ const Login = () => {
               className="w-full bg-black text-white h-14 rounded-xl font-bold text-lg hover:bg-orange-500 transition-colors shadow-lg shadow-black/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {loading ? (
-                // Simple Loading Spinner
                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 "Login"
