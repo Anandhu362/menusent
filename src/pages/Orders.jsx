@@ -2,9 +2,23 @@ import React, { useState, useEffect, useRef } from "react";
 import { AdminSidebar } from "../components/AdminSidebar";
 import { useAuth } from "../context/AuthContext";
 import { Clock, CheckCircle, Phone, MapPin } from "lucide-react";
-import { io } from "socket.io-client"; 
+
+// ✅ NEW: Import Firebase instead of socket.io
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
 
 import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
+
+// ✅ Initialize Firebase using your .env variables
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 const Orders = () => {
   const { user } = useAuth();
@@ -13,39 +27,40 @@ const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ FIX 1: Change to an empty ref, we will attach it to an HTML element instead
+  // Audio ref for the notification sound
   const audioRef = useRef(null);
 
-  // --- 1. INITIAL FETCH & REAL-TIME SOCKET CONNECTION ---
+  // --- 1. INITIAL FETCH & REAL-TIME FIREBASE CONNECTION ---
   useEffect(() => {
-  if (!restaurantId) return;
+    if (!restaurantId) return;
 
-  const fetchInitialOrders = async () => {
-    try {
-      const data = await getRestaurantOrders(restaurantId);
-      setOrders(data);
-    } catch (error) {
-      console.error("Failed to fetch orders:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchInitialOrders();
+    const fetchInitialOrders = async () => {
+      try {
+        const data = await getRestaurantOrders(restaurantId);
+        setOrders(data);
+      } catch (error) {
+        console.error("Failed to fetch orders:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitialOrders();
 
-  // ✅ FIXED: Use correct env variable
-  const SOCKET_URL = import.meta.env.VITE_API_BASE_URL.replace("/api", "");
+    console.log("✅ Orders Board listening to Firebase...");
 
-  const socket = io(SOCKET_URL, {
-    transports: ["websocket"],
-  });
+    // Create a reference to this specific restaurant's live-orders node
+    const ordersRef = ref(db, `live-orders/${restaurantId}`);
+    
+    // Listen for NEW orders that happen AFTER this exact moment
+    const now = Date.now();
+    const newOrdersQuery = query(ordersRef, orderByChild('timestamp'), startAt(now));
 
-  socket.on("connect", () => {
-    console.log("✅ Connected to socket:", socket.id);
-  });
+    // Firebase listener triggers when a new order is pushed
+    const unsubscribe = onChildAdded(newOrdersQuery, (snapshot) => {
+      const newOrder = snapshot.val();
+      console.log("🔥 Real-time order received via Firebase:", newOrder);
 
-  socket.on("receiveNewOrder", (newOrder) => {
-    if (newOrder.restaurantId === restaurantId) {
-
+      // Play the notification sound
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(err => {
@@ -53,19 +68,23 @@ const Orders = () => {
         });
       }
 
-      setOrders((prevOrders) => [newOrder, ...prevOrders]);
-    }
-  });
+      // Add the new order to the Kanban board
+      setOrders((prevOrders) => {
+        // Prevent duplicate orders from appearing
+        if (prevOrders.some(o => o.orderId === newOrder.orderId || o._id === newOrder._id)) {
+          return prevOrders;
+        }
+        return [newOrder, ...prevOrders];
+      });
+    });
 
-  socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected");
-  });
+    // Cleanup: Detach the listener when the component unmounts
+    return () => {
+      unsubscribe();
+      console.log("❌ Firebase listener detached");
+    };
 
-  return () => {
-    socket.disconnect();
-  };
-
-}, [restaurantId]);
+  }, [restaurantId]);
 
   // --- 2. UPDATE STATUS HANDLER ---
   const handleStatusChange = async (orderId, newStatus) => {
@@ -117,7 +136,7 @@ const Orders = () => {
   return (
     <div className="flex h-screen bg-[#f8f9fb] font-sans">
       
-      {/* ✅ FIX 3: Add a hidden native HTML audio element */}
+      {/* Hidden native HTML audio element */}
       <audio ref={audioRef} src="/notification.mp3" preload="auto" className="hidden" />
 
       <AdminSidebar />
