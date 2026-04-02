@@ -2,11 +2,39 @@ import apiClient from "./apiClient";
 
 /**
  * Creates a new menu item with an image upload
- * @param {FormData} formData - Must contain 'name', 'arabicName', 'price', 'categoryId', 'restaurantId', and 'image'
+ * @param {Object|FormData} data - Can be a raw object or FormData
  */
-export const addMenuItem = async (formData) => {
-  // Removed manual 'Content-Type' header to let Axios auto-generate boundary for FormData
-  const response = await apiClient.post('/api/menu-items', formData); 
+export const addMenuItem = async (data) => {
+  let payload = data;
+
+  // Check if the incoming data is a plain object instead of FormData
+  if (!(data instanceof FormData)) {
+    payload = new FormData();
+    
+    // Loop through all data keys and append text fields automatically
+    Object.keys(data).forEach(key => {
+      // Skip the image key here, we handle it below
+      if (key !== 'image' && data[key] !== undefined && data[key] !== null) {
+        payload.append(key, data[key]);
+      }
+    });
+    
+    // Explicitly handle the image file
+    if (data.image && data.image instanceof File) {
+      payload.append('image', data.image);
+    } else if (data.predefinedImage) {
+      // In case you support predefined string URLs in the future
+      payload.append('predefinedImage', data.predefinedImage);
+    }
+  }
+
+  // Send the request with the multipart header
+  const response = await apiClient.post('/api/menu-items', payload, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  
   return response.data;
 };
 
