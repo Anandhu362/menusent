@@ -35,21 +35,21 @@ export const AdminSidebar = () => {
   // Both Admin and Restaurant get Menu Management
   navItems.push({ label: "Menu Management", icon: UtensilsCrossed, path: "/restaurant/menu-management" });
 
-  // TABLE MANAGEMENT HAS BEEN COMPLETELY REMOVED HERE
-
   // ==========================================
   // 2. DYNAMIC SETUP MENU
   // ==========================================
   const setupItems = [];
 
-  // Only show the Restaurants tab to Super Admins
+  // Super Admin Setup Items
   if (user?.role === 'admin') {
     setupItems.push({ label: "Restaurants", icon: Store, path: "/restaurant/settings" });
+    setupItems.push({ label: "Settings", icon: Settings, path: "#" });
   }
 
-  // Both get Settings
-  setupItems.push({ label: "Settings", icon: Settings, path: "#" });
-
+  // ✅ NEW: Restaurant Owner Setup Items
+  if (user?.role === 'restaurant') {
+    setupItems.push({ label: "Store Profile", icon: Settings, path: "/restaurant/profile" });
+  }
 
   // Handle actual logout
   const handleLogout = () => {
