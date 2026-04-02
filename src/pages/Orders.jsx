@@ -60,6 +60,15 @@ const Orders = () => {
       const newOrder = snapshot.val();
       console.log("🔥 Real-time order received via Firebase:", newOrder);
 
+      // ==========================================
+      // 🚨 NEW FIX: PROTECTIVE SHIELD
+      // If the backend sends a corrupted object ID, ignore it.
+      // ==========================================
+      if (typeof newOrder._id === 'object' || typeof newOrder._id === 'undefined') {
+        console.error("❌ Blocked corrupted order from rendering. _id must be a string.", newOrder);
+        return; // Stop here, do not add this broken order to the screen
+      }
+
       // Play the notification sound
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
