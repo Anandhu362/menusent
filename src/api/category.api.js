@@ -2,11 +2,33 @@ import apiClient from "./apiClient";
 
 /**
  * Creates a new category with an image upload
- * @param {FormData} formData - Must contain 'name', 'restaurantId', and 'image' (File)
+ * @param {Object|FormData} data - Can be a raw object or FormData
  */
-export const addCategory = async (formData) => {
-  // Removed manual 'Content-Type' header so Axios can auto-generate the boundary
-  const response = await apiClient.post('/api/categories', formData);
+export const addCategory = async (data) => {
+  let payload = data;
+
+  // Check if the incoming data is a plain object instead of FormData
+  if (!(data instanceof FormData)) {
+    payload = new FormData();
+    payload.append('name', data.name);
+    payload.append('restaurantId', data.restaurantId);
+    
+    // Check if the image exists and is an actual File object
+    if (data.image && data.image instanceof File) {
+      payload.append('image', data.image);
+    } else if (data.predefinedImage) {
+      // Handle cases where a string URL is passed instead of a file
+      payload.append('predefinedImage', data.predefinedImage);
+    }
+  }
+
+  // Axios will automatically set the correct Content-Type for FormData
+  const response = await apiClient.post('/api/categories', payload, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  
   return response.data;
 };
 
