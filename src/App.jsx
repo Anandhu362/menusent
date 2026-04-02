@@ -16,7 +16,8 @@ import MenuManagement from "./pages/MenuManagement";
 import TableManagement from "./pages/TableManagement"; 
 import Checkout from "./pages/Checkout"; 
 import RestaurantSettings from "./pages/RestaurantSettings";
-// ✅ NEW: Import the Orders page
+// ✅ NEW: Import the Owner Profile page
+import OwnerProfile from "./pages/OwnerProfile"; 
 import Orders from "./pages/Orders"; 
 
 // API
@@ -110,7 +111,16 @@ function App() {
                 } 
               />
 
-              {/* ✅ NEW: Protected Orders Route */}
+              {/* ✅ NEW: Protected Owner Profile Route */}
+              <Route 
+                path="/restaurant/profile" 
+                element={
+                  <ProtectedRoute>
+                    <OwnerProfile />
+                  </ProtectedRoute>
+                } 
+              />
+
               <Route 
                 path="/restaurant/orders" 
                 element={
@@ -137,7 +147,7 @@ function App() {
                 } 
               /> 
               
-              {/* Restaurant Settings Route */}
+              {/* Restaurant Settings Route (Admin Dashboard view) */}
               <Route 
                 path="/restaurant/settings" 
                 element={
