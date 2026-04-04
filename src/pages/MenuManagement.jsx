@@ -9,7 +9,7 @@ import { CategoryManagement } from "../components/CategoryManagement";
 import { AddCategoryModal } from "../components/AddCategoryModal";
 import { EditCategoryImageModal } from "../components/EditCategoryImageModal";
 
-// ✅ NEW: Import the Universal Stock Settings component
+// Import the Universal Stock Settings component
 import { UniversalStockSettings } from "../components/UniversalStockSettings";
 
 // --- GLOBAL AUTHENTICATION ---
@@ -188,9 +188,11 @@ const MenuManagement = () => {
         return;
       }
 
+      // ✅ FIX: Added the description field to the payload being sent to the API
       const payload = {
         name: updatedProductData.name,
         arabicName: updatedProductData.arabicName || "",
+        description: updatedProductData.description || "", 
         price: parseFloat(updatedProductData.price),
         hasVariants: updatedProductData.hasVariants,
         variants: updatedProductData.hasVariants ? JSON.stringify(updatedProductData.variants) : "[]",
@@ -273,7 +275,7 @@ const MenuManagement = () => {
 
         <div className="p-4 md:p-8 max-w-[1600px] mx-auto pb-12">
           
-          {/* ✅ NEW: Universal Stock Settings Panel Added Here */}
+          {/* Universal Stock Settings Panel Added Here */}
           <UniversalStockSettings />
 
           <CategoryManagement
@@ -374,6 +376,13 @@ const MenuManagement = () => {
                             {item.name}
                           </h4>
                         </div>
+                        
+                        {/* ✅ FIX: Added Description Display in the Admin Panel */}
+                        {item.description && (
+                          <p className="text-xs text-gray-500 font-medium line-clamp-1 mb-0.5 mt-0.5">
+                            {item.description}
+                          </p>
+                        )}
 
                         {item.arabicName && (
                           <p
@@ -384,7 +393,7 @@ const MenuManagement = () => {
                           </p>
                         )}
 
-                        <p className="text-sm text-gray-500 font-medium mb-1">{item.categoryId?.name}</p>
+                        <p className="text-sm text-gray-500 font-medium mb-1 mt-1">{item.categoryId?.name}</p>
                         
                         <p className={`text-xl font-extrabold ${!isItemActive ? 'text-gray-400' : 'text-[#ff6b35]'}`}>
                           {isFrom && <span className="text-xs font-bold text-gray-400 mr-1 uppercase">From</span>}
