@@ -72,13 +72,19 @@ const Checkout = () => {
             <CheckCircle2 className="w-10 h-10 text-green-500" />
           </div>
           <h2 className="text-2xl font-black text-slate-900 mb-2">Order Placed!</h2>
-          <p className="text-slate-500 font-medium mb-6">
+          <p className="text-slate-500 font-medium mb-4">
             Your order has been sent to the kitchen successfully.
           </p>
+
+          {/* --- NEW: Hardcoded 30 Minute Delivery Text --- */}
+          <div className="bg-blue-50 text-blue-700 w-full px-4 py-3 rounded-xl mb-6 text-sm font-semibold border border-blue-100">
+            Your item will be delivered in exactly <span className="font-extrabold text-blue-800">30 minutes</span>.
+          </div>
           
-          <div className="bg-gray-50 w-full rounded-2xl p-4 mb-8 border border-gray-100 border-dashed">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Order ID</p>
-            <p className="text-lg font-black text-[#ff6b35]">{orderSuccess}</p>
+          {/* --- UPDATED: Highlighted Order ID Section --- */}
+          <div className="bg-orange-50 w-full rounded-2xl p-5 mb-8 border-2 border-orange-200 shadow-sm">
+            <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-1">Order ID</p>
+            <p className="text-2xl font-black text-[#ff6b35] tracking-wide">{orderSuccess}</p>
           </div>
 
           <button 
