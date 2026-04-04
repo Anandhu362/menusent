@@ -85,6 +85,13 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
           {item.name}
         </h3>
 
+        {/* ✅ NEW: Item Description Display */}
+        {item.description && (
+          <p className={`text-[11px] font-medium mt-1 line-clamp-2 leading-tight ${isOutOfStock ? 'text-gray-400' : 'text-gray-500'}`}>
+            {item.description}
+          </p>
+        )}
+
         {/* Arabic Name Display */}
         {item.arabicName && (
           <p 

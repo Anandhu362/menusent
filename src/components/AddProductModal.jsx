@@ -3,6 +3,8 @@ import { X, ChevronDown, CheckCircle2, UploadCloud, Loader2, Search, Languages, 
 
 // Import the new search API
 import { searchGlobalMenuItems } from "../api/menuItem.api.js";
+// ✅ IMPORT THE NEW COMPONENT
+import { ProductDescriptionInput } from "./ProductDescriptionInput.jsx";
 
 export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = [] }) => {
   // Form State
@@ -10,6 +12,10 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
   const [arabicName, setArabicName] = useState("");
   const [showArabic, setShowArabic] = useState(false);
   
+  // ✅ NEW: Description State
+  const [hasDescription, setHasDescription] = useState(false);
+  const [description, setDescription] = useState("");
+
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD"); 
   const [categoryId, setCategoryId] = useState("");
@@ -17,7 +23,7 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
   const [imageFile, setImageFile] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState(""); 
 
-  // ✅ NEW: Variants State
+  // Variants State
   const [hasVariants, setHasVariants] = useState(false);
   const [variants, setVariants] = useState([{ name: "", arabicName: "", price: "" }]);
   
@@ -47,6 +53,8 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
       setProductName("");
       setArabicName("");
       setShowArabic(false);
+      setHasDescription(false); // ✅ Reset
+      setDescription("");       // ✅ Reset
       setPrice("");
       setCurrency("USD"); 
       setCategoryId("");
@@ -110,9 +118,15 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
       setShowArabic(true);
     }
     
+    // ✅ Load description if it exists
+    if (product.description) {
+      setHasDescription(true);
+      setDescription(product.description);
+    }
+
     setCurrency(product.currency || "USD"); 
     
-    // ✅ Load existing variants if the suggested product has them
+    // Load existing variants if the suggested product has them
     if (product.hasVariants && product.variants && product.variants.length > 0) {
       setHasVariants(true);
       setVariants(product.variants);
@@ -152,7 +166,7 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
     }
   };
 
-  // ✅ Variant Handlers
+  // Variant Handlers
   const handleAddVariant = () => {
     setVariants([...variants, { name: "", arabicName: "", price: "" }]);
   };
@@ -174,7 +188,7 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
     setIsSubmitting(true);
 
     try {
-      // ✅ Calculate base price based on lowest variant (acts as "Starting From" price)
+      // Calculate base price based on lowest variant (acts as "Starting From" price)
       let finalBasePrice = price;
       if (hasVariants) {
         const validVariantPrices = variants
@@ -189,11 +203,15 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
       const formData = new FormData();
       formData.append("name", productName);
       formData.append("arabicName", arabicName);
+      
+      // ✅ Append new description data
+      formData.append("description", hasDescription ? description : "");
+      
       formData.append("price", finalBasePrice);
       formData.append("currency", currency); 
       formData.append("categoryId", categoryId);
       
-      // ✅ Append new variant data
+      // Append variant data
       formData.append("hasVariants", hasVariants);
       if (hasVariants) {
         formData.append("variants", JSON.stringify(variants));
@@ -219,6 +237,8 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
     if (isSubmitting) return; 
     setProductName("");
     setArabicName("");
+    setHasDescription(false); // ✅ Reset
+    setDescription("");       // ✅ Reset
     setPrice("");
     setCurrency("USD");
     setCategoryId("");
@@ -238,7 +258,7 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
   const categoryLabel = selectedCategory ? selectedCategory.name : "Select a category";
   const selectedCurrencyLabel = CURRENCY_OPTIONS.find(c => c.value === currency)?.label || "USD ($)";
 
-  // ✅ Complex Validation checking base fields AND variants if toggled
+  // Validation checking base fields AND variants if toggled
   const isBaseValid = productName.trim() && categoryId && (imageFile || existingImageUrl);
   const isPriceValid = hasVariants 
     ? variants.length > 0 && variants.every(v => v.name.trim() && v.price && parseFloat(v.price) > 0)
@@ -354,7 +374,16 @@ export const AddProductModal = ({ isOpen, onClose, onAddProduct, categories = []
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 relative z-30">
+          {/* ✅ 1.5. NEW: ITEM DESCRIPTION COMPONENT */}
+          <ProductDescriptionInput 
+            hasDescription={hasDescription}
+            setHasDescription={setHasDescription}
+            description={description}
+            setDescription={setDescription}
+            disabled={isSubmitting}
+          />
+
+          <div className="grid grid-cols-2 gap-4 relative z-20">
             {/* 2. CATEGORY DROPDOWN */}
             <div className="relative" ref={categoryDropdownRef}>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Category</label>

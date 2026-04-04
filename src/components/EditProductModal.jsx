@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, ChevronDown, Edit3, CheckCircle2, Languages, Plus, Trash2 } from "lucide-react";
 
+// ✅ IMPORT THE NEW COMPONENT
+import { ProductDescriptionInput } from "./ProductDescriptionInput.jsx";
+
 export const EditProductModal = ({ isOpen, onClose, product, onUpdateProduct, categories = [] }) => {
   const [name, setName] = useState("");
   const [arabicName, setArabicName] = useState("");
   const [showArabic, setShowArabic] = useState(false);
+  
+  // ✅ NEW: Description State
+  const [hasDescription, setHasDescription] = useState(false);
+  const [description, setDescription] = useState("");
   
   const [price, setPrice] = useState("");
   
@@ -16,7 +23,7 @@ export const EditProductModal = ({ isOpen, onClose, product, onUpdateProduct, ca
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
   const currencyDropdownRef = useRef(null);
 
-  // ✅ NEW: Variants State
+  // Variants State
   const [hasVariants, setHasVariants] = useState(false);
   const [variants, setVariants] = useState([{ name: "", arabicName: "", price: "" }]);
 
@@ -47,10 +54,15 @@ export const EditProductModal = ({ isOpen, onClose, product, onUpdateProduct, ca
       setArabicName(existingArabic);
       setShowArabic(existingArabic !== ""); 
       
+      // ✅ Load existing description
+      const existingDesc = product.description || "";
+      setDescription(existingDesc);
+      setHasDescription(existingDesc.trim() !== "");
+      
       setPrice(product.price ? product.price.toString() : "");
       setCurrency(product.currency || "USD");
 
-      // ✅ Load existing variants if they exist
+      // Load existing variants if they exist
       if (product.hasVariants && product.variants && product.variants.length > 0) {
         setHasVariants(true);
         setVariants(product.variants);
@@ -72,7 +84,7 @@ export const EditProductModal = ({ isOpen, onClose, product, onUpdateProduct, ca
     }
   }, [product, isOpen, categories]);
 
-  // ✅ Variant Handlers
+  // Variant Handlers
   const handleAddVariant = () => {
     setVariants([...variants, { name: "", arabicName: "", price: "" }]);
   };
@@ -104,6 +116,7 @@ export const EditProductModal = ({ isOpen, onClose, product, onUpdateProduct, ca
       ...product,
       name: name,
       arabicName: arabicName,
+      description: hasDescription ? description : "", // ✅ Add updated description
       price: parseFloat(finalBasePrice),
       hasVariants: hasVariants,
       variants: hasVariants ? variants : [],
@@ -221,6 +234,15 @@ export const EditProductModal = ({ isOpen, onClose, product, onUpdateProduct, ca
               </div>
             )}
           </div>
+
+          {/* ✅ 1.5 NEW: ITEM DESCRIPTION COMPONENT */}
+          <ProductDescriptionInput 
+            hasDescription={hasDescription}
+            setHasDescription={setHasDescription}
+            description={description}
+            setDescription={setDescription}
+            disabled={false}
+          />
 
           {/* GRID: CATEGORY & CURRENCY DROPDOWNS */}
           <div className="grid grid-cols-2 gap-4 relative z-50">
