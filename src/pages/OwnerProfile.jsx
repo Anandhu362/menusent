@@ -3,7 +3,10 @@ import { Store, MapPin, Phone, Upload, Lock, Save, Camera, AlertCircle, CheckCir
 import { useAuth } from "../context/AuthContext";
 import { AdminSidebar } from "../components/AdminSidebar"; 
 
-// ✅ FIX: Import apiClient directly to force the required multipart headers
+// ✅ NEW: Import the Delivery Settings Panel
+import DeliverySettingsPanel from "../components/DeliverySettingsPanel";
+
+// Import apiClient directly to force the required multipart headers
 import apiClient from "../api/apiClient";
 
 const OwnerProfile = () => {
@@ -12,7 +15,14 @@ const OwnerProfile = () => {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  
+  // ✅ NEW: State for the Delivery Settings saving status
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  
   const [message, setMessage] = useState({ type: "", text: "" });
+
+  // ✅ NEW: Holds the full raw restaurant object to pass to the Delivery component
+  const [restaurantData, setRestaurantData] = useState(null);
 
   const [profileData, setProfileData] = useState({
     name: "",
@@ -33,13 +43,15 @@ const OwnerProfile = () => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        // ✅ Direct API call
         const response = await apiClient.get('/api/restaurants/owner/profile');
         const data = response.data;
 
+        // ✅ Store the full data object so DeliverySettingsPanel can read data.location and data.deliverySettings
+        setRestaurantData(data);
+
         setProfileData({
           name: data.name || "",
-          location: data.fullAddress || "", // Correctly maps "Dubai" to the input
+          location: data.fullAddress || "", // Text address
           whatsappNumber: data.whatsappNumber || "",
         });
         
@@ -69,7 +81,7 @@ const OwnerProfile = () => {
     }
   };
 
-  // Save real data to the database
+  // Save Public Profile
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setSavingProfile(true);
@@ -83,7 +95,6 @@ const OwnerProfile = () => {
         formData.append("logo", logoFile);
       }
 
-      // ✅ FIX: Force the multipart header so the backend Multer actually reads the body
       await apiClient.put('/api/restaurants/owner/profile', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
@@ -95,6 +106,20 @@ const OwnerProfile = () => {
       showMessage("error", "Failed to update profile.");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // ✅ NEW: Save Delivery Settings (Map Pin & Rules)
+  const handleSaveDeliverySettings = async (deliveryData) => {
+    setSavingDelivery(true);
+    try {
+      // Sends { location: {lat, lng}, deliverySettings: {...} }
+      await apiClient.put('/api/restaurants/owner/delivery-settings', deliveryData);
+      showMessage("success", "Delivery configurations saved successfully!");
+    } catch (error) {
+      showMessage("error", "Failed to save delivery settings.");
+    } finally {
+      setSavingDelivery(false);
     }
   };
 
@@ -112,7 +137,6 @@ const OwnerProfile = () => {
 
     setSavingPassword(true);
     try {
-      // ✅ Direct API call
       await apiClient.put('/api/restaurants/owner/password', {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword
@@ -155,7 +179,10 @@ const OwnerProfile = () => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
-              <div className="lg:col-span-2">
+              {/* LEFT COLUMN: Takes up 2/3 of the space */}
+              <div className="lg:col-span-2 space-y-8">
+                
+                {/* 1. Public Details Form */}
                 <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
                   <h2 className="text-xl font-bold mb-8 flex items-center gap-2 text-slate-900">
                     <Store className="w-6 h-6 text-[#ff6b35]" />
@@ -244,8 +271,17 @@ const OwnerProfile = () => {
                     </div>
                   </form>
                 </div>
+
+                {/* ✅ 2. NEW: Interactive Delivery Settings Component */}
+                <DeliverySettingsPanel 
+                  initialData={restaurantData}
+                  onSave={handleSaveDeliverySettings}
+                  isSaving={savingDelivery}
+                />
+
               </div>
 
+              {/* RIGHT COLUMN: Takes up 1/3 of the space */}
               <div className="lg:col-span-1">
                 <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
                   <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">

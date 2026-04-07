@@ -1,30 +1,28 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom"; 
 import { 
   TrendingUp,
-  TrendingDown, // ✅ NEW: Added for negative trends
-  Minus,        // ✅ NEW: Added for neutral/zero trends
+  TrendingDown,
+  Minus,
   DollarSign,
   Package,
   ChevronDown,
-  Search,
   ShoppingBag,
   Loader2
 } from "lucide-react";
 
-// 1. IMPORT SIDEBAR AND WIDGET COMPONENTS
 import { AdminSidebar } from "../components/AdminSidebar";
 import { SalesSummary } from "../components/SalesSummary";
 import { OrderToast } from "../components/OrderToast";
-
-// 2. IMPORT API AND AUTH CONTEXT
 import { fetchDashboardStats } from "../api/order.api";
 import { useAuth } from "../context/AuthContext";
 
-// 3. IMPORT FIREBASE FOR REAL-TIME UPDATES
+// Import apiClient to handle the toggle request and fetch profile status
+import apiClient from "../api/apiClient";
+
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onChildAdded, query, limitToLast } from "firebase/database";
 
-// --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -35,13 +33,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// --- HELPERS ---
 const timeAgo = (dateString) => {
   if (!dateString) return "";
   const date = new Date(dateString);
   const now = new Date();
   const diffInMinutes = Math.floor((now - date) / 60000);
-
   if (diffInMinutes < 1) return "Just now";
   if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
   const diffInHours = Math.floor(diffInMinutes / 60);
@@ -49,20 +45,12 @@ const timeAgo = (dateString) => {
   return `${Math.floor(diffInHours / 24)} day${Math.floor(diffInHours / 24) > 1 ? 's' : ''} ago`;
 };
 
-// --- COMPONENTS ---
-
-// ✅ UPDATED: Dynamic Metric Card with Trend Logic
 const MetricCard = ({ title, value, icon: Icon, trend = 0 }) => {
-  // Determine if trend is positive, negative, or exactly zero
-  const safeTrend = Number(trend) || 0; // Fallback to 0 if undefined
+  const safeTrend = Number(trend) || 0;
   const isPositive = safeTrend > 0;
   const isNegative = safeTrend < 0;
-  
-  // Set dynamic colors and icons based on the trend
   const trendColor = isPositive ? "text-green-500" : isNegative ? "text-red-500" : "text-gray-400";
   const TrendIcon = isPositive ? TrendingUp : isNegative ? TrendingDown : Minus;
-  
-  // Format the number to show + or - and 1 decimal place
   const formattedTrend = isPositive ? `+${safeTrend.toFixed(1)}%` : `${safeTrend.toFixed(1)}%`;
 
   return (
@@ -70,8 +58,6 @@ const MetricCard = ({ title, value, icon: Icon, trend = 0 }) => {
       <div>
         <h3 className="text-sm font-medium text-gray-500 mb-1">{title}</h3>
         <div className="text-2xl font-bold text-slate-900">{value}</div>
-        
-        {/* Dynamic Trend Section */}
         <div className={`flex items-center gap-1 mt-2 text-sm font-medium opacity-90 ${trendColor}`}>
           <TrendIcon className="h-4 w-4" />
           <span>{safeTrend === 0 ? "Same as yesterday" : `${formattedTrend} from yesterday`}</span> 
@@ -87,8 +73,10 @@ const MetricCard = ({ title, value, icon: Icon, trend = 0 }) => {
 const StatusBadge = ({ status }) => {
   const styles = {
     Pending: "bg-gray-100 text-gray-800",
+    Accepted: "bg-blue-100 text-blue-800",
     Preparing: "bg-yellow-100 text-yellow-800",
-    Completed: "bg-green-100 text-green-800",
+    "Out for Delivery": "bg-purple-100 text-purple-800",
+    Delivered: "bg-green-100 text-green-800",
     Cancelled: "bg-red-100 text-red-800",
   };
   return (
@@ -98,10 +86,8 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// --- MAIN PAGE COMPONENT ---
 const RestaurantDashboard = () => {
-  // --- STATE MANAGEMENT ---
-  // Ensure default metrics include the trend properties to avoid undefined errors
+  const navigate = useNavigate(); 
   const [metrics, setMetrics] = useState({ 
     totalSales: 0, 
     totalOrders: 0, 
@@ -115,166 +101,187 @@ const RestaurantDashboard = () => {
   const [currency, setCurrency] = useState('AED');
   const [isLoading, setIsLoading] = useState(true);
   const [newOrderToast, setNewOrderToast] = useState(null);
-  
-  // Track when API is fully loaded so Firebase doesn't trigger early
   const [isApiLoaded, setIsApiLoaded] = useState(false);
-  const processedOrders = useRef(new Set());
+  
+  const [isAcceptingOrders, setIsAcceptingOrders] = useState(true);
+  const [isToggling, setIsToggling] = useState(false);
 
+  const processedOrders = useRef(new Set());
   const { user } = useAuth();
 
-  // --- 1. DATA FETCHING (Runs on load) ---
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const targetRestaurantId = user?.restaurantId || user?._id;
-        if (!targetRestaurantId) return;
-
-        const data = await fetchDashboardStats(targetRestaurantId);
-        setMetrics(data.metrics);
-        setCurrency(data.metrics.currency || 'AED');
-        setTopItems(data.topItems);
-        setRecentOrders(data.recentOrders);
+        const targetId = user?.restaurantId || user?._id;
+        if (!targetId) return;
         
-        // Add existing fetched orders to the processed Set so they don't trigger the toast
-        data.recentOrders.forEach(order => {
-          processedOrders.current.add(order.orderId);
-        });
+        // Fetch dashboard stats
+        const data = await fetchDashboardStats(targetId);
+        if (data && data.metrics) {
+          setMetrics({
+            totalSales: data.metrics.totalSales || 0,
+            totalOrders: data.metrics.totalOrders || 0,
+            avgOrderValue: data.metrics.avgOrderValue || 0,
+            salesTrend: data.metrics.salesTrend || 0,
+            ordersTrend: data.metrics.ordersTrend || 0,
+            avgValueTrend: data.metrics.avgValueTrend || 0
+          });
+          setCurrency(data.metrics.currency || 'AED');
+          setTopItems(data.topItems || []);
+          setRecentOrders(data.recentOrders || []);
+          data.recentOrders?.forEach(order => processedOrders.current.add(order.orderId));
+        }
+
+        // Fetch current profile to get the live 'isActive' status
+        try {
+          const profileRes = await apiClient.get('/api/restaurants/owner/profile');
+          if (profileRes.data && profileRes.data.isActive !== undefined) {
+            setIsAcceptingOrders(profileRes.data.isActive);
+          }
+        } catch (profileErr) {
+          console.error("Failed to load restaurant status", profileErr);
+        }
 
       } catch (error) {
-        console.error("Failed to load dashboard stats:", error);
+        console.error("Dashboard Load Error:", error);
       } finally {
         setIsLoading(false);
-        setIsApiLoaded(true); // Signal that the API is done seeding the processedOrders list
+        setIsApiLoaded(true);
       }
     };
-
     if (user) loadDashboardData();
   }, [user]);
 
-  // --- 2. REAL-TIME FIREBASE CONNECTION ---
+  // Firebase Live Orders
   useEffect(() => {
-    // Do not attach Firebase until the API has loaded the existing orders
     if (!user || !isApiLoaded) return;
-    
-    const targetRestaurantId = user?.restaurantId || user?._id;
-    if (!targetRestaurantId) return;
-
-    const ordersRef = ref(db, `live-orders/${targetRestaurantId}`);
-    
-    // Ignore timestamps entirely to avoid clock skew. Just look at the absolute last item added.
+    const targetId = user?.restaurantId || user?._id;
+    const ordersRef = ref(db, `live-orders/${targetId}`);
     const newOrdersQuery = query(ordersRef, limitToLast(1));
 
     const unsubscribe = onChildAdded(newOrdersQuery, (snapshot) => {
       const newOrder = snapshot.val();
+      if (!newOrder || processedOrders.current.has(newOrder.orderId)) return;
       
-      // If the order was already handled by the API load, skip it.
-      if (processedOrders.current.has(newOrder.orderId)) {
-        return; 
-      }
-      
-      // It's a brand new order! Record it so it doesn't fire twice.
       processedOrders.current.add(newOrder.orderId);
+      new Audio('/notification.mp3').play().catch(() => {});
+      setNewOrderToast({ orderId: newOrder.orderId, time: 'Just now' });
 
-      console.log("🔥 NEW Real-time order received:", newOrder.orderId);
-
-      // Play sound
-      const audio = new Audio('/notification.mp3');
-      audio.play().catch(err => console.log("Audio autoplay blocked by browser", err));
-
-      // Show Toast Notification
-      setNewOrderToast({
-        orderId: newOrder.orderId,
-        time: 'Just now'
-      });
-
-      // Update Top Metrics (Real-time update)
       setMetrics((prev) => {
-        const newTotalOrders = prev.totalOrders + 1;
-        const newTotalSales = prev.totalSales + (newOrder.totalAmount || 0);
-        const newAvgValue = newTotalSales / newTotalOrders;
-
-        return {
-          ...prev, // Keep existing trends until they refresh the page
-          totalSales: newTotalSales,
-          totalOrders: newTotalOrders,
-          avgOrderValue: newAvgValue,
-          currency: prev.currency || currency 
-        };
+        const nOrders = (prev.totalOrders || 0) + 1;
+        const nSales = (prev.totalSales || 0) + (newOrder.totalAmount || 0);
+        return { ...prev, totalSales: nSales, totalOrders: nOrders, avgOrderValue: nSales / nOrders };
       });
 
-      // Update Recent Orders Table
-      setRecentOrders((prev) => {
-        if (prev.some(o => o.orderId === newOrder.orderId || o._id === newOrder._id)) {
-          return prev;
-        }
-        const updated = [newOrder, ...prev];
-        return updated.slice(0, 5);
-      });
+      setRecentOrders((prev) => [newOrder, ...prev].slice(0, 5));
     });
-
     return () => unsubscribe();
-  }, [user, isApiLoaded]); // Added isApiLoaded to dependency array
+  }, [user, isApiLoaded]);
+
+  // Handle flipping the switch
+  const handleToggleStatus = async () => {
+    setIsToggling(true);
+    try {
+      const newStatus = !isAcceptingOrders;
+      await apiClient.patch('/api/restaurants/owner/toggle-status', {
+        isAcceptingOrders: newStatus
+      });
+      setIsAcceptingOrders(newStatus);
+    } catch (error) {
+      console.error("Failed to toggle status", error);
+      alert("Failed to update status. Please try again.");
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-[#f8f9fb] font-sans relative">
       <AdminSidebar />
-      <main className="flex-1 h-full overflow-y-auto relative z-10 focus:outline-none pl-0">
+      <main className="flex-1 h-full overflow-y-auto pl-0">
         
-        {/* Header */}
         <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-          <h2 className="text-2xl font-bold text-slate-900">Dashboard Overview</h2>
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 pl-6 border-l border-gray-100 cursor-pointer group">
-               <img src="https://i.pravatar.cc/150?img=12" alt="Admin" className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" />
-               <div className="hidden md:block text-sm">
-                 <p className="font-bold text-slate-900 leading-none">Grill House Owner</p>
-                 <p className="text-gray-400 mt-1 leading-none">Admin</p>
-               </div>
-               <ChevronDown className="h-4 w-4 text-gray-400" />
-            </div>
+          <div className="flex items-center">
+            <h2 className="text-2xl font-bold text-slate-900">Dashboard Overview</h2>
+          </div>
+
+          {/* Toggle Container */}
+          <div className="hidden md:flex items-center gap-3 bg-slate-50 px-4 py-1.5 rounded-full border border-gray-200 shadow-inner">
+            <span className={`text-[11px] font-black uppercase tracking-wider ${isAcceptingOrders ? 'text-green-600' : 'text-slate-400'}`}>
+              {isAcceptingOrders ? 'Accepting Orders' : 'Paused (Busy)'}
+            </span>
+            <button 
+              onClick={handleToggleStatus}
+              disabled={isToggling}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-[#ff6b35] focus:ring-offset-2 ${
+                isAcceptingOrders ? 'bg-green-500' : 'bg-slate-300'
+              } ${isToggling ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <span 
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
+                  isAcceptingOrders ? 'translate-x-6' : 'translate-x-1'
+                }`} 
+              />
+            </button>
           </div>
         </header>
 
+        {/* Mobile Toggle (Visible only on small screens) */}
+        <div className="md:hidden bg-white px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <span className={`text-xs font-bold uppercase tracking-wider ${isAcceptingOrders ? 'text-green-600' : 'text-slate-400'}`}>
+            {isAcceptingOrders ? 'Accepting Orders' : 'Paused (Busy)'}
+          </span>
+          <button 
+            onClick={handleToggleStatus}
+            disabled={isToggling}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
+              isAcceptingOrders ? 'bg-green-500' : 'bg-slate-300'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${isAcceptingOrders ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
         <div className="p-4 md:p-8 max-w-[1600px] mx-auto pb-12">
           {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 text-[#ff6b35] animate-spin" />
-            </div>
+            <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 text-[#ff6b35] animate-spin" /></div>
           ) : (
             <>
-              {/* ✅ UPDATED: Passing Dynamic Trends to Metrics */}
               <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <MetricCard 
                   title="Today's Total Sales" 
-                  value={`${currency} ${metrics.totalSales.toFixed(2)}`} 
+                  value={`${currency} ${(metrics.totalSales || 0).toFixed(2)}`} 
                   icon={DollarSign} 
                   trend={metrics.salesTrend} 
                 />
                 <MetricCard 
                   title="Total Orders" 
-                  value={metrics.totalOrders} 
+                  value={metrics.totalOrders || 0} 
                   icon={ShoppingBag} 
                   trend={metrics.ordersTrend} 
                 />
                 <MetricCard 
                   title="Avg. Order Value" 
-                  value={`${currency} ${metrics.avgOrderValue.toFixed(2)}`} 
+                  value={`${currency} ${(metrics.avgOrderValue || 0).toFixed(2)}`} 
                   icon={Package} 
                   trend={metrics.avgValueTrend} 
                 />
               </section>
 
-              {/* FULL WIDTH RECENT ORDERS LAYOUT */}
               <div className="mb-6 h-[500px] flex flex-col w-full">
                 <section className="bg-white rounded-[20px] shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full w-full">
-                  <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+                  <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-900">Recent Orders</h3>
-                    <button className="text-sm font-medium text-[#ff6b35] hover:underline">View All</button>
+                    <button 
+                      onClick={() => navigate('/restaurant/orderspage')}
+                      className="text-sm font-medium text-[#ff6b35] hover:underline"
+                    >
+                      View All
+                    </button>
                   </div>
 
                   <div className="overflow-auto flex-1 hide-scrollbar">
-                    <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-                    <table className="w-full text-left border-collapse min-w-[700px]">
+                    <table className="w-full text-left min-w-[700px]">
                       <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10">
                         <tr className="text-[10px] uppercase tracking-widest font-bold text-gray-400 border-b border-gray-100">
                           <th className="px-8 py-3">Order ID</th>
@@ -286,43 +293,24 @@ const RestaurantDashboard = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {recentOrders.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" className="text-center py-8 text-gray-500 text-sm">No recent orders found.</td>
-                          </tr>
+                          <tr><td colSpan="5" className="text-center py-8 text-gray-500 text-sm">No recent orders found.</td></tr>
                         ) : (
                           recentOrders.map((order) => (
                             <tr key={order._id || order.orderId} className="hover:bg-gray-50/50 transition-colors group">
-                              <td className="px-8 py-3 font-bold text-[#ff6b35] whitespace-nowrap text-xs">
-                                {order.orderId}
-                              </td>
+                              <td className="px-8 py-3 font-bold text-[#ff6b35] text-xs">{order.orderId}</td>
                               <td className="px-6 py-3">
-                                <div className="flex flex-col gap-1 min-w-[200px]">
+                                <div className="flex flex-col gap-1">
                                   {order.items?.slice(0, 2).map((item, index) => (
                                     <div key={index} className="flex items-center gap-2">
-                                      <div className="h-5 w-5 rounded bg-gray-50 flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-100 uppercase group-hover:border-gray-200 transition-colors">
-                                        {item.name?.charAt(0) || '-'}
-                                      </div>
-                                      <div>
-                                        <p className="text-xs font-medium text-slate-600 leading-none">{item.name}</p>
-                                      </div>
+                                      <div className="h-5 w-5 rounded bg-gray-50 flex items-center justify-center text-gray-400 text-[10px] font-bold border border-gray-100 uppercase">{item.name?.charAt(0) || '-'}</div>
+                                      <p className="text-xs font-medium text-slate-600 leading-none">{item.name}</p>
                                     </div>
                                   ))}
-                                  {order.items?.length > 2 && (
-                                    <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-widest ml-7 mt-0.5">
-                                      +{order.items.length - 2} more items
-                                    </span>
-                                  )}
                                 </div>
                               </td>
-                              <td className="px-6 py-3 font-bold text-slate-800 whitespace-nowrap text-xs">
-                                {currency} {(order.totalAmount || 0).toFixed(2)}
-                              </td>
-                              <td className="px-6 py-3 whitespace-nowrap">
-                                <StatusBadge status={order.orderStatus || 'Pending'} />
-                              </td>
-                              <td className="px-6 py-3 text-right text-[11px] text-gray-400 whitespace-nowrap font-medium">
-                                {timeAgo(order.createdAt || new Date())}
-                              </td>
+                              <td className="px-6 py-3 font-bold text-slate-800 text-xs">{currency} {(order.totalAmount || 0).toFixed(2)}</td>
+                              <td className="px-6 py-3"><StatusBadge status={order.orderStatus || 'Pending'} /></td>
+                              <td className="px-6 py-3 text-right text-[11px] text-gray-400 font-medium">{timeAgo(order.createdAt)}</td>
                             </tr>
                           ))
                         )}
@@ -332,9 +320,9 @@ const RestaurantDashboard = () => {
                 </section>
               </div>
 
-              {/* BOTTOM SECTION */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <SalesSummary topItems={topItems} />
+                {/* ✅ UPDATED: Passing restaurantId down to the child component */}
+                <SalesSummary topItems={topItems} restaurantId={user?.restaurantId || user?._id} />
                 <div className="bg-transparent border-2 border-dashed border-gray-200 rounded-[20px] flex items-center justify-center p-6 min-h-[250px] text-gray-400 font-medium">
                   + Add New Widget
                 </div>
@@ -344,7 +332,6 @@ const RestaurantDashboard = () => {
         </div>
       </main>
 
-      {/* Toast Render */}
       {newOrderToast && (
         <OrderToast 
           orderId={newOrderToast.orderId} 

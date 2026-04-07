@@ -1,21 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2 } from 'lucide-react';
-import { placeOrder } from '../api/order.api'; // ✅ NEW: Import the API function
+import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle } from 'lucide-react';
 
-// Import the global cart hook
+// ✅ NEW: Import the API helper and the Map Component
+import { placeOrder, fetchDeliveryFee } from '../api/order.api';
+import LocationPickerMap from '../components/LocationPickerMap';
 import { useCart } from '../context/CartContext';
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { cartItems, clearCart } = useCart();
 
-  // State to handle the success screen and store the Order ID
   const [orderSuccess, setOrderSuccess] = useState(null);
 
+  // ==========================================
+  // ✅ NEW: DELIVERY FEE STATES
+  // ==========================================
+  const [customerLocation, setCustomerLocation] = useState(null);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryError, setDeliveryError] = useState("");
+  const [isCalculatingFee, setIsCalculatingFee] = useState(false);
+
+  // Financial Math
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   const vatAmount = subtotal * 0.05; 
-  const grandTotal = subtotal + vatAmount;
+  // ✅ ADDED deliveryFee to the grandTotal
+  const grandTotal = subtotal + vatAmount + deliveryFee;
   const cartCurrency = cartItems.length > 0 ? cartItems[0].currency : 'AED';
 
   const [formData, setFormData] = useState({
@@ -31,68 +41,125 @@ const Checkout = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  // ==========================================
+  // ✅ OPTIMIZED: HANDLE MAP PIN DROP
+  // ==========================================
+  const handleLocationSelect = async (coords) => {
+    // ✅ OPTIMIZATION: Don't recalculate if the pin moved less than ~10 meters
+    // This saves on Google Maps API (Distance Matrix) costs during micro-adjustments
+    if (customerLocation) {
+      const dist = Math.sqrt(
+        Math.pow(coords.lat - customerLocation.lat, 2) + 
+        Math.pow(coords.lng - customerLocation.lng, 2)
+      );
+      if (dist < 0.0001) return; // Skip API call for tiny movements
+    }
+
+    setCustomerLocation(coords);
+    setDeliveryError("");
+    setDeliveryFee(0);
+    setIsCalculatingFee(true);
 
     try {
-      // Package the payload for the backend
-      const securePayload = {
-        restaurantId: cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0] || null, 
-        customerDetails: formData,
-        items: cartItems.map(item => ({ 
-          menuItemId: item._id, 
-          quantity: item.quantity,
-          variantName: item.variant // Send as variantName to match the backend
-        }))
-      };
+      const restaurantId = cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0];
+      
+      const response = await fetchDeliveryFee({
+        restaurantId,
+        customerLat: coords.lat,
+        customerLng: coords.lng
+      });
 
-      // ✅ 1. Send the order directly to the database
+      if (response.isDeliverable) {
+        setDeliveryFee(response.fee);
+      } else {
+        setDeliveryError(response.message || "Sorry, we do not deliver to this area.");
+      }
+    } catch (error) {
+      setDeliveryError(error.response?.data?.message || "Failed to calculate delivery fee.");
+    } finally {
+      setIsCalculatingFee(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Safety check: Don't submit if they haven't dropped a pin or are outside the zone
+    if (!customerLocation || deliveryError) return;
+    
+    setIsSubmitting(true);
+
+    const securePayload = {
+      restaurantId: cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0] || null, 
+      customerDetails: {
+        ...formData,
+        // ✅ ADDED Coordinates to the payload
+        lat: customerLocation.lat,
+        lng: customerLocation.lng
+      },
+      items: cartItems.map(item => ({ 
+        menuItemId: item._id, 
+        quantity: item.quantity,
+        variantName: item.variant 
+      }))
+    };
+
+    console.log("📤 Attempting to place order...", securePayload);
+
+    try {
       const response = await placeOrder(securePayload);
+      console.log("✅ Order response received:", response);
 
-      // ✅ 2. Show the success screen using the newly generated Order ID
-      setOrderSuccess(response.order.orderId);
-
-      // ✅ 3. Clear the cart 
-      clearCart();
+      if (response && response.order) {
+        setOrderSuccess(response.order);
+        clearCart();
+      } else {
+        throw new Error("Invalid response format from server");
+      }
 
     } catch (error) {
-      console.error("Failed to process checkout:", error);
-      alert("Checkout failed. Please try again.");
+      console.error("❌ Checkout failure details:", error);
+      alert(`Order Failed: ${error.response?.data?.message || error.message}`);
       setIsSubmitting(false); 
     } 
   };
 
-  // SUCCESS SCREEN
+  // ✅ MOBILE-OPTIMIZED SUCCESS SCREEN
   if (orderSuccess) {
     return (
-      <div className="h-screen w-full bg-[#f8f9fb] flex flex-col items-center justify-center p-5 animate-in fade-in duration-500">
-        <div className="bg-white rounded-[32px] p-8 max-w-sm w-full shadow-2xl shadow-black/5 border border-gray-100 flex flex-col items-center text-center">
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mb-6">
-            <CheckCircle2 className="w-10 h-10 text-green-500" />
+      <div className="min-h-screen bg-[#f8f9fb] font-sans md:flex md:items-center md:justify-center p-5">
+        <div className="w-full bg-white md:max-w-[400px] md:h-[800px] md:rounded-[40px] md:shadow-2xl md:border-[8px] md:border-black flex flex-col items-center justify-center text-center p-8 relative overflow-hidden animate-in fade-in zoom-in duration-500">
+          
+          <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6">
+            <CheckCircle2 className="w-12 h-12 text-green-500" />
           </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2">Order Placed!</h2>
-          <p className="text-slate-500 font-medium mb-4">
-            Your order has been sent to the kitchen successfully.
+
+          <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">Order Placed!</h2>
+          <p className="text-slate-500 font-medium mb-10 px-4 leading-relaxed">
+            Your feast has been sent to the kitchen and is being prepared.
           </p>
 
-          {/* --- NEW: Hardcoded 30 Minute Delivery Text --- */}
-          <div className="bg-blue-50 text-blue-700 w-full px-4 py-3 rounded-xl mb-6 text-sm font-semibold border border-blue-100">
-            Your item will be delivered in exactly <span className="font-extrabold text-blue-800">30 minutes</span>.
-          </div>
-          
-          {/* --- UPDATED: Highlighted Order ID Section --- */}
-          <div className="bg-orange-50 w-full rounded-2xl p-5 mb-8 border-2 border-orange-200 shadow-sm">
-            <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-1">Order ID</p>
-            <p className="text-2xl font-black text-[#ff6b35] tracking-wide">{orderSuccess}</p>
+          <div className="bg-orange-50 w-full rounded-[24px] p-6 mb-10 border-2 border-orange-100/50 shadow-sm">
+            <p className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em] mb-2">Reference ID</p>
+            <p className="text-2xl font-black text-[#ff6b35] tracking-widest">{orderSuccess.orderId}</p>
           </div>
 
-          <button 
-            onClick={() => navigate(-1)} 
-            className="w-full bg-[#ff6b35] text-white py-4 rounded-full font-bold text-[16px] shadow-[0_8px_20px_-6px_rgba(255,107,53,0.4)] hover:bg-[#ff5a1f] active:scale-[0.98] transition-all"
-          >
-            Back to Menu
-          </button>
+          <div className="w-full space-y-4 px-2">
+            <button 
+              onClick={() => navigate(`/track/${orderSuccess._id}`)} 
+              className="w-full bg-[#ff6b35] text-white py-5 rounded-[20px] font-black text-[16px] shadow-[0_12px_24px_-8px_rgba(255,107,53,0.5)] hover:bg-[#ff5a1f] active:scale-[0.97] transition-all flex items-center justify-center gap-3"
+            >
+              <Truck className="w-5 h-5" />
+              <span>Track My Order</span>
+            </button>
+
+            <button 
+              onClick={() => navigate('/')} 
+              className="w-full py-4 text-slate-400 font-bold text-[14px] hover:text-slate-600 transition-colors"
+            >
+              Back to Menu
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -100,7 +167,6 @@ const Checkout = () => {
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] font-sans md:flex md:items-center md:justify-center">
-      {/* CSS to hide the scrollbar cleanly */}
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -108,7 +174,6 @@ const Checkout = () => {
 
       <div className="w-full bg-[#f8f9fb] md:max-w-[400px] md:h-[800px] md:rounded-[40px] md:shadow-2xl md:border-[8px] md:border-black flex flex-col relative overflow-hidden">
         
-        {/* Header */}
         <header className="sticky top-0 z-40 bg-[#f8f9fb]/90 backdrop-blur-md px-5 py-5 flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="h-10 w-10 bg-white rounded-full flex items-center justify-center text-slate-600 shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors">
             <ArrowLeft className="h-5 w-5" />
@@ -118,7 +183,6 @@ const Checkout = () => {
 
         <div className="flex-1 overflow-y-auto p-5 pt-2 pb-32 hide-scrollbar">
           
-          {/* Order Summary */}
           <div className="bg-white rounded-[24px] p-5 mb-6 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.04)] border border-gray-100/80">
             <h2 className="text-sm font-extrabold text-slate-900 mb-4 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-[#ff6b35]" /> Order Summary
@@ -143,13 +207,8 @@ const Checkout = () => {
                   <span className="font-bold text-slate-900 text-sm">{cartCurrency} {(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
-              
-              {cartItems.length === 0 && (
-                <p className="text-sm text-gray-400 font-medium italic">No items added yet.</p>
-              )}
             </div>
 
-            {/* Price Breakdown */}
             <div className="pt-4 border-t border-gray-100/80 space-y-2">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500 font-medium">Subtotal</span>
@@ -159,6 +218,19 @@ const Checkout = () => {
                 <span className="text-slate-500 font-medium">VAT (5%)</span>
                 <span className="font-semibold text-slate-800">{cartCurrency} {vatAmount.toFixed(2)}</span>
               </div>
+              
+              {/* ✅ ADDED: Dynamic Delivery Fee Row */}
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500 font-medium">Delivery Fee</span>
+                <span className="font-semibold text-slate-800">
+                  {isCalculatingFee ? (
+                    <span className="text-gray-400 animate-pulse text-xs">Calculating...</span>
+                  ) : (
+                    `${cartCurrency} ${deliveryFee.toFixed(2)}`
+                  )}
+                </span>
+              </div>
+
               <div className="flex justify-between items-center pt-3 mt-1 border-t border-gray-100/80">
                 <span className="font-bold text-slate-900">Total</span>
                 <span className="font-black text-[#ff6b35] text-lg">{cartCurrency} {grandTotal.toFixed(2)}</span>
@@ -166,9 +238,31 @@ const Checkout = () => {
             </div>
           </div>
 
-          {/* Form */}
           <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
-            <h2 className="text-sm font-extrabold text-slate-900 mb-3 px-1">Delivery Details</h2>
+            
+            {/* ✅ NEW: Map Component Section */}
+            <div className="space-y-3 mb-6">
+              <h2 className="text-sm font-extrabold text-slate-900 px-1">1. Set Delivery Location</h2>
+              <LocationPickerMap onLocationSelect={handleLocationSelect} />
+              
+              {/* Error state if out of zone */}
+              {deliveryError && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-100">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <p>{deliveryError}</p>
+                </div>
+              )}
+              
+              {/* Success state if location is good */}
+              {customerLocation && !deliveryError && !isCalculatingFee && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-xl text-xs font-bold border border-green-100">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <p>Location confirmed. Delivery fee: {cartCurrency} {deliveryFee.toFixed(2)}</p>
+                </div>
+              )}
+            </div>
+
+            <h2 className="text-sm font-extrabold text-slate-900 mb-3 px-1">2. Delivery Details</h2>
             
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -200,20 +294,23 @@ const Checkout = () => {
 
         </div>
 
-        {/* Sticky Bottom Action */}
         <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md p-5 border-t border-gray-100/80 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <button 
             type="submit" 
             form="checkout-form"
-            disabled={isSubmitting || cartItems.length === 0}
-            className="w-full bg-[#ff6b35] text-white py-4 rounded-full font-bold text-[16px] shadow-[0_8px_20px_-6px_rgba(255,107,53,0.4)] hover:bg-[#ff5a1f] active:scale-[0.98] transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:active:scale-100"
+            disabled={isSubmitting || cartItems.length === 0 || !customerLocation || !!deliveryError || isCalculatingFee}
+            className="w-full bg-[#ff6b35] text-white py-4 rounded-full font-bold text-[16px] shadow-[0_8px_20px_-6px_rgba(255,107,53,0.4)] hover:bg-[#ff5a1f] active:scale-[0.98] transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:bg-slate-300 disabled:shadow-none disabled:active:scale-100"
           >
             {isSubmitting ? (
               "Processing..."
+            ) : !customerLocation ? (
+              "Please Set Location"
+            ) : deliveryError ? (
+              "Delivery Unavailable"
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5" />
-                <span>Confirm Order</span>
+                <span>Pay {cartCurrency} {grandTotal.toFixed(2)}</span>
               </>
             )}
           </button>
