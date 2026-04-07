@@ -16,16 +16,18 @@ import MenuManagement from "./pages/MenuManagement";
 import TableManagement from "./pages/TableManagement"; 
 import Checkout from "./pages/Checkout"; 
 import RestaurantSettings from "./pages/RestaurantSettings";
-// ✅ NEW: Import the Owner Profile page
 import OwnerProfile from "./pages/OwnerProfile"; 
 import Orders from "./pages/Orders"; 
+
+// ✅ NEW: Import the Order Tracking page
+import OrderTracking from "./pages/OrderTracking"; 
 
 // API
 import apiClient from "./api/apiClient";
 
 // Context Providers
 import { CartProvider } from "./context/CartContext";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext"; // Verified consistent naming
 
 const MenuExperience = () => {
   const { slug } = useParams(); 
@@ -67,7 +69,6 @@ const MenuExperience = () => {
   if (loading) return <div className="text-white text-center pt-20">Loading Menu...</div>;
   if (error || !restaurant) return <div className="text-white text-center pt-20">Menu not found.</div>;
 
-  // If paused, block access
   if (restaurant.isActive === false) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-4 text-center">
@@ -96,12 +97,13 @@ function App() {
         <CartProvider>
           <BrowserRouter>
             <Routes>
+              {/* --- Public Landing --- */}
               <Route path="/" element={<Home />} />
               
-              {/* LOGIN ROUTE */}
+              {/* --- Authentication --- */}
               <Route path="/login" element={<Login />} />
               
-              {/* RESTAURANT OWNER DASHBOARD ROUTES */}
+              {/* --- Protected Restaurant Owner Routes --- */}
               <Route 
                 path="/restaurant/dashboard" 
                 element={
@@ -111,7 +113,6 @@ function App() {
                 } 
               />
 
-              {/* ✅ NEW: Protected Owner Profile Route */}
               <Route 
                 path="/restaurant/profile" 
                 element={
@@ -147,7 +148,6 @@ function App() {
                 } 
               /> 
               
-              {/* Restaurant Settings Route (Admin Dashboard view) */}
               <Route 
                 path="/restaurant/settings" 
                 element={
@@ -157,7 +157,6 @@ function App() {
                 } 
               />
 
-              {/* PROTECTED ADMIN ROUTE */}
               <Route 
                 path="/admin" 
                 element={
@@ -167,13 +166,15 @@ function App() {
                 } 
               />
 
-              {/* Checkout route */}
+              {/* --- Public Customer Experience Routes --- */}
+              
+              {/* ✅ NEW: Public Order Tracking route (Mobile Optimized) */}
+              <Route path="/track/:orderId" element={<OrderTracking />} />
+
               <Route path="/checkout" element={<Checkout />} />
 
-              {/* Mobile-friendly menu route */}
               <Route path="/:slug/menu" element={<RestaurantMenu />} />
 
-              {/* 3D Menu Experience route */}
               <Route path="/:slug" element={<MenuExperience />} />
             </Routes>
           </BrowserRouter>
