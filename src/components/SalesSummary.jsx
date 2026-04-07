@@ -1,5 +1,6 @@
-import React from "react";
-import { ChevronDown } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ChevronDown, Loader2 } from "lucide-react";
+import apiClient from "../api/apiClient";
 
 // Predefined brand colors for the top 3 items to maintain the UI design
 const CHART_COLORS = [
@@ -8,7 +9,15 @@ const CHART_COLORS = [
   { bg: "bg-[#f97316]", stroke: "#f97316" }, // Orange
 ];
 
-export const SalesSummary = ({ topItems = [] }) => {
+export const SalesSummary = ({ topItems = [], restaurantId }) => {
+  // Filter & Dropdown State
+  const [filter, setFilter] = useState("Monthly");
+  const [isOpen, setIsOpen] = useState(false);
+  const [items, setItems] = useState(topItems);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const dropdownRef = useRef(null);
+
   // SVG Calculations for the concentric circles
   const outerRadius = 80;
   const middleRadius = 60;
@@ -18,9 +27,58 @@ export const SalesSummary = ({ topItems = [] }) => {
   const middleCircumference = 2 * Math.PI * middleRadius;
   const innerCircumference = 2 * Math.PI * innerRadius;
 
-  // 1. Ensure we always have exactly 3 items to prevent UI crashes, even if there are less than 3 sales
+  // Sync initial items from parent on first load
+  useEffect(() => {
+    if (topItems.length > 0 && filter === "Monthly") {
+      setItems(topItems);
+    }
+  }, [topItems]);
+
+  // Handle clicking outside the custom dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch new data when the filter changes
+  useEffect(() => {
+    const fetchFilteredData = async () => {
+      if (!restaurantId) return;
+      setIsLoading(true);
+      
+      try {
+        // Adjust this endpoint path to match your backend analytics route
+        const response = await apiClient.get(`/api/orders/top-items`, {
+          params: { 
+            restaurantId: restaurantId, 
+            timeframe: filter.toLowerCase() // Sends 'daily', 'weekly', or 'monthly'
+          }
+        });
+        
+        if (response.data && response.data.topItems) {
+          setItems(response.data.topItems);
+        }
+      } catch (error) {
+        console.error(`Failed to fetch ${filter} top items:`, error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Only fetch if they change the filter to something else, or if we have no items
+    if (filter !== "Monthly" || items.length === 0) {
+      fetchFilteredData();
+    }
+  }, [filter, restaurantId]);
+
+  // 1. Ensure we always have exactly 3 items to prevent UI crashes
   const safeItems = [
-    ...topItems, 
+    ...items, 
     { name: "N/A", orders: 0 }, 
     { name: "N/A", orders: 0 }, 
     { name: "N/A", orders: 0 }
@@ -31,7 +89,6 @@ export const SalesSummary = ({ topItems = [] }) => {
 
   // 3. Map the real data to the visual properties needed for the chart
   const mappedItems = safeItems.map((item, index) => {
-    // We multiply by 0.75 so the highest item fills exactly 75% of the circle (matching your original design)
     const percent = item.orders === 0 ? 0 : (item.orders / maxOrders) * 0.75;
     
     return {
@@ -56,16 +113,47 @@ export const SalesSummary = ({ topItems = [] }) => {
           </div>
         </div>
         
-        {/* Dropdown Button */}
-        <button className="flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-full text-sm font-medium text-slate-600 hover:bg-gray-50 transition-colors">
-          Monthly
-          <ChevronDown className="h-4 w-4 text-gray-400" />
-        </button>
+        {/* ✅ NEW: Custom Functional Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button 
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-full text-sm font-medium text-slate-600 hover:bg-gray-50 transition-colors bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+          >
+            {filter}
+            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isOpen && (
+            <div className="absolute right-0 mt-2 w-36 bg-white border border-gray-100 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-1.5 z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              {["Daily", "Weekly", "Monthly"].map((option) => (
+                <button
+                  key={option}
+                  onClick={() => {
+                    setFilter(option);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors hover:bg-orange-50 hover:text-[#ff6b35] ${
+                    filter === option ? "text-[#ff6b35] bg-orange-50/50" : "text-slate-600"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Content Section: Legend & Chart */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-8 flex-1">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-8 flex-1 relative">
         
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-xl">
+            <Loader2 className="w-8 h-8 text-[#ff6b35] animate-spin" />
+          </div>
+        )}
+
         {/* Left: Top Items Legend */}
         <div className="flex flex-col gap-6 w-full md:w-auto">
           {mappedItems.map((item, index) => (
