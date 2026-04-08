@@ -3,14 +3,18 @@ import { AdminSidebar } from "../components/AdminSidebar";
 import { useAuth } from "../context/AuthContext";
 import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer } from "lucide-react";
 
-// ✅ Import Print Utilities
+// Print Utilities
 import { useReactToPrint } from "react-to-print";
 import { ReceiptPrinter } from "../components/ReceiptPrinter";
 
-// Initialize Firebase
+// Firebase
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
 import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
+
+// ✅ Import Capacitor Native Tools
+import { Capacitor } from '@capacitor/core';
+import { TcpSocket } from 'capacitor-tcp-socket';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -31,29 +35,78 @@ const Orders = () => {
   const audioRef = useRef(null);
 
   // ==========================================
-  // ✅ FIXED: PRINTING STATE & LOGIC
+  // 🖨️ HYBRID PRINTING LOGIC (Web + Native)
   // ==========================================
   const [orderToPrint, setOrderToPrint] = useState(null);
   const printComponentRef = useRef(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printComponentRef, // ✅ V3+ API requires contentRef instead of content
+  // 1. Web Fallback Printer
+  const handleWebPrint = useReactToPrint({
+    contentRef: printComponentRef,
     documentTitle: "Order_Receipt",
-    onAfterPrint: () => setOrderToPrint(null), // Clear after printing
+    onAfterPrint: () => setOrderToPrint(null),
   });
 
-  // ✅ Auto-Print Effect with a delay to fix the "Race Condition"
   useEffect(() => {
-    if (orderToPrint) {
-      const timer = setTimeout(() => {
-        handlePrint();
-      }, 300); // 300ms gives React time to put the data into the hidden div
+    if (orderToPrint && !Capacitor.isNativePlatform()) {
+      const timer = setTimeout(() => handleWebPrint(), 300);
       return () => clearTimeout(timer);
     }
-  }, [orderToPrint, handlePrint]);
+  }, [orderToPrint, handleWebPrint]);
 
-  const handleManualPrint = (order) => {
-    setOrderToPrint(order);
+  // 2. ✅ NATIVE SILENT TCP PRINTER (For Android Tablet)
+  const printSilentlyOverWiFi = async (order) => {
+    try {
+      // Connect to the printer
+      const connection = await TcpSocket.connect({
+        ipAddress: '192.168.1.100', // Your printer's IP
+        port: 9100
+      });
+      const clientId = connection.client;
+
+      // Format standard thermal ESC/POS text
+      let receiptText = "\x1B\x40"; // Initialize printer
+      receiptText += "\x1B\x61\x01"; // Center align
+      receiptText += `${user?.name?.toUpperCase() || "RESTAURANT"}\x0A`;
+      receiptText += "--------------------------------\x0A";
+      receiptText += "\x1B\x61\x00"; // Left align
+      receiptText += `Order ID: ${order.orderId}\x0A`;
+      receiptText += `Customer: ${order.customerName}\x0A`;
+      receiptText += `Phone: ${order.customerPhone}\x0A`;
+      receiptText += "--------------------------------\x0A";
+      
+      order.items?.forEach(item => {
+        receiptText += `${item.quantity}x ${item.name}\x0A`;
+        receiptText += `   AED ${(item.price * item.quantity).toFixed(2)}\x0A`;
+      });
+      
+      receiptText += "--------------------------------\x0A";
+      receiptText += `TOTAL: AED ${order.totalAmount?.toFixed(2)}\x0A\x0A\x0A\x0A`;
+      receiptText += "\x1D\x56\x41\x10"; // Cut paper command
+
+      // Send the raw bytes to the printer silently
+      await TcpSocket.send({ 
+        client: clientId, 
+        data: receiptText 
+      });
+      
+      // Close the connection
+      await TcpSocket.disconnect({ client: clientId });
+      console.log("Native Silent Print Success!");
+
+    } catch (error) {
+      console.error("Native Print Error:", error);
+      alert("Printer connection failed. Is it turned on and on the same Wi-Fi?");
+    }
+  };
+
+  // 3. Main trigger function
+  const triggerPrint = (order) => {
+    if (Capacitor.isNativePlatform()) {
+      printSilentlyOverWiFi(order); // 🔥 Native Tablet App
+    } else {
+      setOrderToPrint(order); // 🌐 PC Web Browser Fallback
+    }
   };
   // ==========================================
 
@@ -81,11 +134,10 @@ const Orders = () => {
       if (typeof newOrder._id === 'object' || typeof newOrder._id === 'undefined') return;
 
       setOrders((prevOrders) => {
-        // Prevent duplicates
         if (prevOrders.some(o => o._id === newOrder._id)) return prevOrders;
 
-        // ✅ TRIGGER AUTO PRINT FOR TRULY NEW ORDERS
-        setOrderToPrint(newOrder);
+        // ✅ REMOVED: Auto-print when new order arrives
+        // The order will now sit in "New Orders" waiting for acceptance
 
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
@@ -99,14 +151,20 @@ const Orders = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
-  const handleStatusChange = async (orderId, newStatus) => {
+  // ✅ UPDATED: Now receives the full order object instead of just the ID
+  const handleStatusChange = async (order, newStatus) => {
+    const orderId = order._id;
     try {
       setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order._id === orderId ? { ...order, orderStatus: newStatus } : order
-        )
+        prevOrders.map(o => o._id === orderId ? { ...o, orderStatus: newStatus } : o)
       );
       await updateOrderStatus(orderId, newStatus);
+
+      // ✅ ADDED: Trigger print automatically ONLY when the owner clicks "Accept"
+      if (newStatus === "Accepted") {
+        triggerPrint({ ...order, orderStatus: newStatus });
+      }
+
     } catch (error) {
       console.error("Failed to update status:", error);
       const data = await getRestaurantOrders(restaurantId);
@@ -120,49 +178,17 @@ const Orders = () => {
   };
 
   const columns = [
-    { 
-      status: "Pending", 
-      title: "New Orders", 
-      icon: Clock,
-      color: "text-orange-500",
-      bg: "bg-orange-50",
-      border: "border-orange-200",
-    },
-    { 
-      status: "Accepted", 
-      title: "Preparing", 
-      icon: CheckCircle,
-      color: "text-green-500",
-      bg: "bg-green-50",
-      border: "border-green-200",
-    },
-    { 
-      status: "Out for Delivery", 
-      title: "Shipping", 
-      icon: Truck,
-      color: "text-blue-500",
-      bg: "bg-blue-50",
-      border: "border-blue-200",
-    },
-    { 
-      status: "Delivered", 
-      title: "History", 
-      icon: Check,
-      color: "text-slate-500",
-      bg: "bg-slate-50",
-      border: "border-slate-200",
-    }
+    { status: "Pending", title: "New Orders", icon: Clock, color: "text-orange-500", bg: "bg-orange-50", border: "border-orange-200" },
+    { status: "Accepted", title: "Preparing", icon: CheckCircle, color: "text-green-500", bg: "bg-green-50", border: "border-green-200" },
+    { status: "Out for Delivery", title: "Shipping", icon: Truck, color: "text-blue-500", bg: "bg-blue-50", border: "border-blue-200" },
+    { status: "Delivered", title: "History", icon: Check, color: "text-slate-500", bg: "bg-slate-50", border: "border-slate-200" }
   ];
 
   return (
     <div className="flex h-screen bg-[#f8f9fb] font-sans">
       
-      {/* ✅ INVISIBLE PRINTER COMPONENT */}
-      <ReceiptPrinter 
-        ref={printComponentRef} 
-        order={orderToPrint} 
-        restaurant={user} 
-      />
+      {/* INVISIBLE WEB PRINTER COMPONENT (Only used on PC) */}
+      <ReceiptPrinter ref={printComponentRef} order={orderToPrint} restaurant={user} />
 
       <audio ref={audioRef} src="/notification.mp3" preload="auto" className="hidden" />
       <AdminSidebar />
@@ -184,9 +210,7 @@ const Orders = () => {
                       <col.icon className={`h-4 w-4 ${col.color}`} />
                       <h3 className="font-bold text-sm text-slate-800">{col.title}</h3>
                     </div>
-                    <span className="bg-white text-slate-800 text-xs font-black px-2 py-0.5 rounded-full shadow-sm">
-                      {columnOrders.length}
-                    </span>
+                    <span className="bg-white text-slate-800 text-xs font-black px-2 py-0.5 rounded-full shadow-sm">{columnOrders.length}</span>
                   </div>
 
                   <div className="p-3 flex-1 overflow-y-auto space-y-3">
@@ -222,40 +246,27 @@ const Orders = () => {
                             
                             {/* ✅ MANUAL PRINT BUTTON */}
                             <button 
-                              onClick={() => handleManualPrint(order)}
+                              onClick={() => triggerPrint(order)}
                               title="Print Receipt"
                               className="p-1.5 rounded-lg text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors mr-1"
                             >
                               <Printer className="h-4 w-4" />
                             </button>
 
-                            {/* Actions for Pending Stage */}
+                            {/* ✅ UPDATED BUTTONS to pass the full 'order' object */}
                             {col.status === "Pending" && (
                               <>
-                                <button onClick={() => handleStatusChange(order._id, "Cancelled")} className="p-1.5 rounded-lg text-red-500 bg-red-50 hover:bg-red-100"><Check className="h-4 w-4 rotate-45" /></button>
-                                <button onClick={() => handleStatusChange(order._id, "Accepted")} className="text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600">Accept</button>
+                                <button onClick={() => handleStatusChange(order, "Cancelled")} className="p-1.5 rounded-lg text-red-500 bg-red-50 hover:bg-red-100"><Check className="h-4 w-4 rotate-45" /></button>
+                                <button onClick={() => handleStatusChange(order, "Accepted")} className="text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600">Accept</button>
                               </>
                             )}
 
-                            {/* Actions for Accepted/Preparing Stage */}
                             {col.status === "Accepted" && (
-                              <button 
-                                title="Dispatch Order"
-                                onClick={() => handleStatusChange(order._id, "Out for Delivery")}
-                                className="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-blue-500 hover:bg-blue-600"
-                              >
-                                <Truck className="h-3 w-3" /> Dispatch
-                              </button>
+                              <button onClick={() => handleStatusChange(order, "Out for Delivery")} className="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-blue-500 hover:bg-blue-600"><Truck className="h-3 w-3" /> Dispatch</button>
                             )}
 
-                            {/* Action for Out for Delivery Stage */}
                             {col.status === "Out for Delivery" && (
-                              <button 
-                                onClick={() => handleStatusChange(order._id, "Delivered")}
-                                className="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-slate-700 hover:bg-slate-800"
-                              >
-                                <Check className="h-3 w-3" /> Delivered
-                              </button>
+                              <button onClick={() => handleStatusChange(order, "Delivered")} className="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-slate-700 hover:bg-slate-800"><Check className="h-3 w-3" /> Delivered</button>
                             )}
                           </div>
                         </div>
