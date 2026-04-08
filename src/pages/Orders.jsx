@@ -15,6 +15,7 @@ import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
 // ✅ Import Capacitor Native Tools
 import { Capacitor } from '@capacitor/core';
 import { TcpSocket } from 'capacitor-tcp-socket';
+import { LocalNotifications } from '@capacitor/local-notifications'; // ✅ NEW IMPORT
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -129,19 +130,35 @@ const Orders = () => {
     const now = Date.now();
     const newOrdersQuery = query(ordersRef, orderByChild('timestamp'), startAt(now));
 
-    const unsubscribe = onChildAdded(newOrdersQuery, (snapshot) => {
+    // ✅ UPDATED: Added async to the snapshot callback to support notifications
+    const unsubscribe = onChildAdded(newOrdersQuery, async (snapshot) => {
       const newOrder = snapshot.val();
       if (typeof newOrder._id === 'object' || typeof newOrder._id === 'undefined') return;
 
       setOrders((prevOrders) => {
         if (prevOrders.some(o => o._id === newOrder._id)) return prevOrders;
 
-        // ✅ REMOVED: Auto-print when new order arrives
-        // The order will now sit in "New Orders" waiting for acceptance
-
+        // Play the audio sound
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(() => {});
+        }
+
+        // ✅ NEW: Trigger Native Android Notification
+        if (Capacitor.isNativePlatform()) {
+          LocalNotifications.schedule({
+            notifications: [
+              {
+                title: "🚨 New Order Received!",
+                body: `${newOrder.customerName} just placed an order for AED ${newOrder.totalAmount}`,
+                id: Math.floor(Date.now() / 1000), // Safe 32-bit int for Android ID
+                schedule: { at: new Date(Date.now() + 1000) }, // Trigger in 1 second
+                sound: null, 
+                actionTypeId: "",
+                extra: null
+              }
+            ]
+          });
         }
 
         return [newOrder, ...prevOrders];
@@ -151,7 +168,7 @@ const Orders = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
-  // ✅ UPDATED: Now receives the full order object instead of just the ID
+  // Handle Order Status updates
   const handleStatusChange = async (order, newStatus) => {
     const orderId = order._id;
     try {
@@ -160,7 +177,7 @@ const Orders = () => {
       );
       await updateOrderStatus(orderId, newStatus);
 
-      // ✅ ADDED: Trigger print automatically ONLY when the owner clicks "Accept"
+      // ✅ Trigger print automatically ONLY when the owner clicks "Accept"
       if (newStatus === "Accepted") {
         triggerPrint({ ...order, orderStatus: newStatus });
       }
@@ -253,7 +270,7 @@ const Orders = () => {
                               <Printer className="h-4 w-4" />
                             </button>
 
-                            {/* ✅ UPDATED BUTTONS to pass the full 'order' object */}
+                            {/* ACTION BUTTONS */}
                             {col.status === "Pending" && (
                               <>
                                 <button onClick={() => handleStatusChange(order, "Cancelled")} className="p-1.5 rounded-lg text-red-500 bg-red-50 hover:bg-red-100"><Check className="h-4 w-4 rotate-45" /></button>
