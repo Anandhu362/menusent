@@ -14,7 +14,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 
 export const AdminSidebar = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  // CHANGED: Default state is now 'false' so the sidebar starts collapsed
+  const [isExpanded, setIsExpanded] = useState(false);
   const location = useLocation(); 
   const navigate = useNavigate();
   
@@ -46,7 +47,7 @@ export const AdminSidebar = () => {
     setupItems.push({ label: "Settings", icon: Settings, path: "#" });
   }
 
-  // ✅ NEW: Restaurant Owner Setup Items
+  // Restaurant Owner Setup Items
   if (user?.role === 'restaurant') {
     setupItems.push({ label: "Store Profile", icon: Settings, path: "/restaurant/profile" });
   }
