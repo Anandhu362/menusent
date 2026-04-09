@@ -27,7 +27,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// ✅ NEW: Smart Address Formatter to prevent React Object crashes
+// Smart Address Formatter to prevent React Object crashes
 const formatAddress = (addr) => {
   if (!addr) return "";
   if (typeof addr === "string") return addr;
@@ -72,7 +72,7 @@ const Orders = () => {
     }
   }, [orderToPrint, handleWebPrint]);
 
-  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER WITH LOGGING
+  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER
   const printSilentlyOverWiFi = async (order) => {
     try {
       console.log("🖨️ --- INITIATING SILENT PRINT ---");
@@ -118,7 +118,7 @@ const Orders = () => {
       receiptText += `Customer: ${order.customerName}\x0A`;
       receiptText += `Phone: ${order.customerPhone}\x0A`;
       if (order.deliveryAddress) {
-        // ✅ Safely formatted address for printer
+        // Safely formatted address for printer
         receiptText += `Address: ${formatAddress(order.deliveryAddress)}\x0A`;
       }
       receiptText += "------------------------------------------------\x0A";
@@ -142,8 +142,8 @@ const Orders = () => {
       });
       receiptText += "------------------------------------------------\x0A";
 
-      // --- FINANCIALS SECTION ---
-      const subtotal = order.subtotal || order.totalAmount; 
+      // --- FINANCIALS SECTION (Strictly using Database values) ---
+      const subtotal = order.subtotal || 0; 
       const vat = order.vat || 0;
       const delivery = order.deliveryCharge || order.deliveryFee || 0;
 
@@ -153,7 +153,7 @@ const Orders = () => {
 
       receiptText += "------------------------------------------------\x0A";
       receiptText += "\x1B\x45\x01"; // Bold ON
-      receiptText += formatLine("TOTAL:", `AED ${order.totalAmount?.toFixed(2)}`);
+      receiptText += formatLine("TOTAL:", `AED ${(order.totalAmount || 0).toFixed(2)}`);
       receiptText += "\x1B\x45\x00"; // Bold OFF
       receiptText += "------------------------------------------------\x0A";
 
@@ -236,13 +236,13 @@ const Orders = () => {
           audioRef.current.play().catch(() => {});
         }
 
-        // Trigger Native Android Notification
+        // ✅ Notification strictly uses backend totalAmount
         if (Capacitor.isNativePlatform()) {
           LocalNotifications.schedule({
             notifications: [
               {
                 title: "🚨 New Order Received!",
-                body: `${newOrder.customerName} just placed an order for AED ${newOrder.totalAmount}`,
+                body: `${newOrder.customerName} just placed an order for AED ${(newOrder.totalAmount || 0).toFixed(2)}`,
                 id: Math.floor(Date.now() / 1000), 
                 schedule: { at: new Date(Date.now() + 1000) }, 
                 sound: null, 
@@ -337,7 +337,7 @@ const Orders = () => {
                               <Phone className="h-3 w-3 text-slate-400 shrink-0" /> 
                               <span>{order.customerPhone}</span>
                             </div>
-                            {/* ✅ Safely formatted address for UI rendering */}
+                            {/* Safely formatted address for UI rendering */}
                             {order.deliveryAddress && (
                               <div className="flex items-start gap-1 text-[11px] text-gray-500 font-medium">
                                 <MapPin className="h-3 w-3 text-slate-400 mt-0.5 shrink-0" /> 
@@ -356,6 +356,7 @@ const Orders = () => {
                         </div>
 
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+                          {/* ✅ UI CARD NOW TRUSTS THE BACKEND DATABASE TOTAL */}
                           <span className="font-black text-sm text-slate-900">
                             {order.items && order.items.length > 0 ? order.items[0].currency : 'AED'} {(order.totalAmount || 0).toFixed(2)}
                           </span>
