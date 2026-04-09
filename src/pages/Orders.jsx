@@ -27,6 +27,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// ✅ NEW: Smart Address Formatter to prevent React Object crashes
+const formatAddress = (addr) => {
+  if (!addr) return "";
+  if (typeof addr === "string") return addr;
+  if (typeof addr === "object") {
+    const parts = [];
+    if (addr.building) parts.push(addr.building);
+    if (addr.apt) parts.push(`Apt/Villa ${addr.apt}`);
+    if (addr.landmark) parts.push(`Near ${addr.landmark}`);
+    
+    // Fallback just in case keys are named differently
+    if (parts.length === 0) return Object.values(addr).filter(Boolean).join(", ");
+    return parts.join(", ");
+  }
+  return String(addr);
+};
+
 const Orders = () => {
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
@@ -55,14 +72,18 @@ const Orders = () => {
     }
   }, [orderToPrint, handleWebPrint]);
 
-  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER
+  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER WITH LOGGING
   const printSilentlyOverWiFi = async (order) => {
     try {
+      console.log("🖨️ --- INITIATING SILENT PRINT ---");
+      console.log(`Connecting to Printer at 192.168.1.100:9100...`);
+
       const connection = await TcpSocket.connect({
         ipAddress: '192.168.1.100', // Your printer's IP
         port: 9100
       });
       const clientId = connection.client;
+      console.log(`✅ Socket Connected! Client ID: ${clientId}`);
 
       // --- HELPER FUNCTIONS FOR PERFECT 48-COLUMN ALIGNMENT ---
       const padRight = (text, length) => String(text).padEnd(length, ' ').substring(0, length);
@@ -97,7 +118,8 @@ const Orders = () => {
       receiptText += `Customer: ${order.customerName}\x0A`;
       receiptText += `Phone: ${order.customerPhone}\x0A`;
       if (order.deliveryAddress) {
-        receiptText += `Address: ${order.deliveryAddress}\x0A`;
+        // ✅ Safely formatted address for printer
+        receiptText += `Address: ${formatAddress(order.deliveryAddress)}\x0A`;
       }
       receiptText += "------------------------------------------------\x0A";
 
@@ -141,7 +163,7 @@ const Orders = () => {
       receiptText += "Thank you for your order!\x0A\x0A";
       receiptText += "\x1B\x45\x00"; // Bold OFF
       
-      // ✅ ADSPRO WATERMARK (Using ESC/POS Font B for minimal professional look)
+      // ADSPRO WATERMARK (Using ESC/POS Font B for minimal professional look)
       receiptText += "\x1B\x4D\x01"; // Switch to Mini Font
       receiptText += "Powered by MenuSent\x0A";
       receiptText += "System by Adspro Technologies\x0A";
@@ -150,7 +172,13 @@ const Orders = () => {
       receiptText += "\x0A\x0A\x0A\x0A\x0A"; // Feed paper forward before cutting
       receiptText += "\x1D\x56\x41\x10"; // Cut paper command
 
+      console.log("📝 EXACT RAW PAYLOAD BEING SENT TO PRINTER:");
+      console.log("------------------------------------------------");
+      console.log(receiptText.replace(/\x1B/g, '[ESC]').replace(/\x1D/g, '[GS]').replace(/\x0A/g, '[LF]\n'));
+      console.log("------------------------------------------------");
+
       // Send the raw bytes to the printer silently
+      console.log("🚀 Transmitting data over TCP...");
       await TcpSocket.send({ 
         client: clientId, 
         data: receiptText 
@@ -158,10 +186,10 @@ const Orders = () => {
       
       // Close the connection
       await TcpSocket.disconnect({ client: clientId });
-      console.log("Premium Print Success!");
+      console.log("✅ Premium Print Success & Connection Closed!");
 
     } catch (error) {
-      console.error("Native Print Error:", error);
+      console.error("❌ Native Print Error:", error);
       alert("Printer connection failed. Is it turned on and on the same Wi-Fi?");
     }
   };
@@ -242,6 +270,7 @@ const Orders = () => {
 
       // Trigger print automatically ONLY when the owner clicks "Accept"
       if (newStatus === "Accepted") {
+        console.log(`👉 Order ${order.orderId} Accepted! Triggering print...`);
         triggerPrint({ ...order, orderStatus: newStatus });
       }
 
@@ -303,9 +332,18 @@ const Orders = () => {
 
                         <div className="mb-2">
                           <h4 className="font-bold text-slate-800 text-sm">{order.customerName}</h4>
-                          <div className="flex items-center gap-1 text-[11px] text-gray-500 font-medium mt-1">
-                            <Phone className="h-3 w-3 text-slate-400" /> 
-                            <span>{order.customerPhone}</span>
+                          <div className="flex flex-col gap-1 mt-1">
+                            <div className="flex items-center gap-1 text-[11px] text-gray-500 font-medium">
+                              <Phone className="h-3 w-3 text-slate-400 shrink-0" /> 
+                              <span>{order.customerPhone}</span>
+                            </div>
+                            {/* ✅ Safely formatted address for UI rendering */}
+                            {order.deliveryAddress && (
+                              <div className="flex items-start gap-1 text-[11px] text-gray-500 font-medium">
+                                <MapPin className="h-3 w-3 text-slate-400 mt-0.5 shrink-0" /> 
+                                <span className="line-clamp-2 leading-tight">{formatAddress(order.deliveryAddress)}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -326,7 +364,10 @@ const Orders = () => {
                             
                             {/* MANUAL PRINT BUTTON */}
                             <button 
-                              onClick={() => triggerPrint(order)}
+                              onClick={() => {
+                                console.log(`👉 Manual Print Clicked for Order: ${order.orderId}`);
+                                triggerPrint(order);
+                              }}
                               title="Print Receipt"
                               className="p-1.5 rounded-lg text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors mr-1"
                             >
