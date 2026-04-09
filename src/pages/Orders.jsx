@@ -15,7 +15,7 @@ import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
 // ✅ Import Capacitor Native Tools
 import { Capacitor } from '@capacitor/core';
 import { TcpSocket } from 'capacitor-tcp-socket';
-import { LocalNotifications } from '@capacitor/local-notifications'; // ✅ NEW IMPORT
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -55,34 +55,99 @@ const Orders = () => {
     }
   }, [orderToPrint, handleWebPrint]);
 
-  // 2. ✅ NATIVE SILENT TCP PRINTER (For Android Tablet)
+  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER
   const printSilentlyOverWiFi = async (order) => {
     try {
-      // Connect to the printer
       const connection = await TcpSocket.connect({
         ipAddress: '192.168.1.100', // Your printer's IP
         port: 9100
       });
       const clientId = connection.client;
 
-      // Format standard thermal ESC/POS text
+      // --- HELPER FUNCTIONS FOR PERFECT 48-COLUMN ALIGNMENT ---
+      const padRight = (text, length) => String(text).padEnd(length, ' ').substring(0, length);
+      const formatLine = (label, value) => {
+        const valStr = String(value);
+        const spaces = 48 - label.length - valStr.length;
+        return spaces > 0 ? label + " ".repeat(spaces) + valStr + "\x0A" : label + " " + valStr + "\x0A";
+      };
+
       let receiptText = "\x1B\x40"; // Initialize printer
+
+      // --- HEADER SECTION ---
       receiptText += "\x1B\x61\x01"; // Center align
-      receiptText += `${user?.name?.toUpperCase() || "RESTAURANT"}\x0A`;
-      receiptText += "--------------------------------\x0A";
+      receiptText += "\x1B\x45\x01"; // Bold ON
+      receiptText += "\x1D\x21\x11"; // Double height & width (Premium look)
+      receiptText += `${user?.name || "Grill Town Resturant"}\x0A`;
+      receiptText += "\x1D\x21\x00"; // Reset text size
+      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += "\x0A"; // Small gap
+      
+      if (user?.trn) receiptText += `TRN: ${user.trn}\x0A`;
+      if (user?.address) receiptText += `${user.address}\x0A`;
+      receiptText += `Tel: ${user?.phone || ""}\x0A`;
+      receiptText += "------------------------------------------------\x0A";
+
+      // --- ORDER DETAILS SECTION ---
       receiptText += "\x1B\x61\x00"; // Left align
+      receiptText += "\x1B\x45\x01"; // Bold ON
       receiptText += `Order ID: ${order.orderId}\x0A`;
+      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += `Date: ${new Date(order.createdAt).toLocaleString()}\x0A`;
       receiptText += `Customer: ${order.customerName}\x0A`;
       receiptText += `Phone: ${order.customerPhone}\x0A`;
-      receiptText += "--------------------------------\x0A";
-      
+      if (order.deliveryAddress) {
+        receiptText += `Address: ${order.deliveryAddress}\x0A`;
+      }
+      receiptText += "------------------------------------------------\x0A";
+
+      // --- ITEMS TABLE HEADER ---
+      receiptText += "\x1B\x45\x01"; // Bold ON
+      // Exact alignment: Qty (5 chars) + Item (35 chars) + Amt (8 chars) = 48 chars
+      receiptText += "Qty  Item                                    Amt\x0A"; 
+      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += "------------------------------------------------\x0A";
+
+      // --- ITEMS LOOP ---
       order.items?.forEach(item => {
-        receiptText += `${item.quantity}x ${item.name}\x0A`;
-        receiptText += `   AED ${(item.price * item.quantity).toFixed(2)}\x0A`;
+        const qtyStr = padRight(`${item.quantity}x`, 5);
+        // Truncate long names to 31 chars so they don't break the layout
+        const itemName = item.name.length > 34 ? item.name.substring(0, 31) + "..." : item.name;
+        const itemStr = padRight(itemName, 35);
+        const priceStr = String((item.price * item.quantity).toFixed(2)).padStart(8, ' ');
+        
+        receiptText += `${qtyStr}${itemStr}${priceStr}\x0A`;
       });
+      receiptText += "------------------------------------------------\x0A";
+
+      // --- FINANCIALS SECTION ---
+      const subtotal = order.subtotal || order.totalAmount; 
+      const vat = order.vat || 0;
+      const delivery = order.deliveryCharge || order.deliveryFee || 0;
+
+      receiptText += formatLine("Subtotal:", subtotal.toFixed(2));
+      if (vat > 0) receiptText += formatLine("VAT (5%):", vat.toFixed(2));
+      if (delivery > 0) receiptText += formatLine("Delivery:", delivery.toFixed(2));
+
+      receiptText += "------------------------------------------------\x0A";
+      receiptText += "\x1B\x45\x01"; // Bold ON
+      receiptText += formatLine("TOTAL:", `AED ${order.totalAmount?.toFixed(2)}`);
+      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += "------------------------------------------------\x0A";
+
+      // --- FOOTER SECTION ---
+      receiptText += "\x1B\x61\x01"; // Center align
+      receiptText += "\x1B\x45\x01"; // Bold ON
+      receiptText += "Thank you for your order!\x0A\x0A";
+      receiptText += "\x1B\x45\x00"; // Bold OFF
       
-      receiptText += "--------------------------------\x0A";
-      receiptText += `TOTAL: AED ${order.totalAmount?.toFixed(2)}\x0A\x0A\x0A\x0A`;
+      // ✅ ADSPRO WATERMARK (Using ESC/POS Font B for minimal professional look)
+      receiptText += "\x1B\x4D\x01"; // Switch to Mini Font
+      receiptText += "Powered by MenuSent\x0A";
+      receiptText += "System by Adspro Technologies\x0A";
+      receiptText += "\x1B\x4D\x00"; // Reset back to Standard Font
+      
+      receiptText += "\x0A\x0A\x0A\x0A\x0A"; // Feed paper forward before cutting
       receiptText += "\x1D\x56\x41\x10"; // Cut paper command
 
       // Send the raw bytes to the printer silently
@@ -93,7 +158,7 @@ const Orders = () => {
       
       // Close the connection
       await TcpSocket.disconnect({ client: clientId });
-      console.log("Native Silent Print Success!");
+      console.log("Premium Print Success!");
 
     } catch (error) {
       console.error("Native Print Error:", error);
@@ -104,9 +169,9 @@ const Orders = () => {
   // 3. Main trigger function
   const triggerPrint = (order) => {
     if (Capacitor.isNativePlatform()) {
-      printSilentlyOverWiFi(order); // 🔥 Native Tablet App
+      printSilentlyOverWiFi(order); 
     } else {
-      setOrderToPrint(order); // 🌐 PC Web Browser Fallback
+      setOrderToPrint(order); 
     }
   };
   // ==========================================
@@ -130,7 +195,6 @@ const Orders = () => {
     const now = Date.now();
     const newOrdersQuery = query(ordersRef, orderByChild('timestamp'), startAt(now));
 
-    // ✅ UPDATED: Added async to the snapshot callback to support notifications
     const unsubscribe = onChildAdded(newOrdersQuery, async (snapshot) => {
       const newOrder = snapshot.val();
       if (typeof newOrder._id === 'object' || typeof newOrder._id === 'undefined') return;
@@ -144,15 +208,15 @@ const Orders = () => {
           audioRef.current.play().catch(() => {});
         }
 
-        // ✅ NEW: Trigger Native Android Notification
+        // Trigger Native Android Notification
         if (Capacitor.isNativePlatform()) {
           LocalNotifications.schedule({
             notifications: [
               {
                 title: "🚨 New Order Received!",
                 body: `${newOrder.customerName} just placed an order for AED ${newOrder.totalAmount}`,
-                id: Math.floor(Date.now() / 1000), // Safe 32-bit int for Android ID
-                schedule: { at: new Date(Date.now() + 1000) }, // Trigger in 1 second
+                id: Math.floor(Date.now() / 1000), 
+                schedule: { at: new Date(Date.now() + 1000) }, 
                 sound: null, 
                 actionTypeId: "",
                 extra: null
@@ -168,7 +232,6 @@ const Orders = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
-  // Handle Order Status updates
   const handleStatusChange = async (order, newStatus) => {
     const orderId = order._id;
     try {
@@ -177,7 +240,7 @@ const Orders = () => {
       );
       await updateOrderStatus(orderId, newStatus);
 
-      // ✅ Trigger print automatically ONLY when the owner clicks "Accept"
+      // Trigger print automatically ONLY when the owner clicks "Accept"
       if (newStatus === "Accepted") {
         triggerPrint({ ...order, orderStatus: newStatus });
       }
@@ -261,7 +324,7 @@ const Orders = () => {
                           
                           <div className="flex gap-1 items-center">
                             
-                            {/* ✅ MANUAL PRINT BUTTON */}
+                            {/* MANUAL PRINT BUTTON */}
                             <button 
                               onClick={() => triggerPrint(order)}
                               title="Print Receipt"
