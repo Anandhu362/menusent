@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle } from 'lucide-react';
 
-// ✅ NEW: Import the API helper and the Map Component
 import { placeOrder, fetchDeliveryFee } from '../api/order.api';
 import LocationPickerMap from '../components/LocationPickerMap';
 import { useCart } from '../context/CartContext';
@@ -12,10 +11,11 @@ const Checkout = () => {
   const { cartItems, clearCart } = useCart();
 
   const [orderSuccess, setOrderSuccess] = useState(null);
+  
+  // ✅ FIX 1: Capture the slug safely before the cart is cleared
+  const [fallbackSlug, setFallbackSlug] = useState(null);
 
-  // ==========================================
-  // ✅ NEW: DELIVERY FEE STATES
-  // ==========================================
+  // Delivery Fee States
   const [customerLocation, setCustomerLocation] = useState(null);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryError, setDeliveryError] = useState("");
@@ -24,7 +24,6 @@ const Checkout = () => {
   // Financial Math
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   const vatAmount = subtotal * 0.05; 
-  // ✅ ADDED deliveryFee to the grandTotal
   const grandTotal = subtotal + vatAmount + deliveryFee;
   const cartCurrency = cartItems.length > 0 ? cartItems[0].currency : 'AED';
 
@@ -41,18 +40,13 @@ const Checkout = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ==========================================
-  // ✅ OPTIMIZED: HANDLE MAP PIN DROP
-  // ==========================================
   const handleLocationSelect = async (coords) => {
-    // ✅ OPTIMIZATION: Don't recalculate if the pin moved less than ~10 meters
-    // This saves on Google Maps API (Distance Matrix) costs during micro-adjustments
     if (customerLocation) {
       const dist = Math.sqrt(
         Math.pow(coords.lat - customerLocation.lat, 2) + 
         Math.pow(coords.lng - customerLocation.lng, 2)
       );
-      if (dist < 0.0001) return; // Skip API call for tiny movements
+      if (dist < 0.0001) return; 
     }
 
     setCustomerLocation(coords);
@@ -84,16 +78,18 @@ const Checkout = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Safety check: Don't submit if they haven't dropped a pin or are outside the zone
     if (!customerLocation || deliveryError) return;
     
     setIsSubmitting(true);
+
+    // ✅ FIX 1 (Continued): Capture the slug from the cart before we process the order and clear it
+    const currentSlug = cartItems[0]?.restaurantSlug || null;
+    setFallbackSlug(currentSlug);
 
     const securePayload = {
       restaurantId: cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0] || null, 
       customerDetails: {
         ...formData,
-        // ✅ ADDED Coordinates to the payload
         lat: customerLocation.lat,
         lng: customerLocation.lng
       },
@@ -104,11 +100,8 @@ const Checkout = () => {
       }))
     };
 
-    console.log("📤 Attempting to place order...", securePayload);
-
     try {
       const response = await placeOrder(securePayload);
-      console.log("✅ Order response received:", response);
 
       if (response && response.order) {
         setOrderSuccess(response.order);
@@ -118,17 +111,24 @@ const Checkout = () => {
       }
 
     } catch (error) {
-      console.error("❌ Checkout failure details:", error);
       alert(`Order Failed: ${error.response?.data?.message || error.message}`);
       setIsSubmitting(false); 
     } 
   };
 
-  // ✅ MOBILE-OPTIMIZED SUCCESS SCREEN
+  // ==========================================
+  // ✅ OPTIMIZED SUCCESS SCREEN (EDGE-TO-EDGE ON MOBILE)
+  // ==========================================
   if (orderSuccess) {
+    // Determine the safest slug to use for navigation
+    const targetSlug = orderSuccess.restaurantId?.slug || fallbackSlug;
+
     return (
-      <div className="min-h-screen bg-[#f8f9fb] font-sans md:flex md:items-center md:justify-center p-5">
-        <div className="w-full bg-white md:max-w-[400px] md:h-[800px] md:rounded-[40px] md:shadow-2xl md:border-[8px] md:border-black flex flex-col items-center justify-center text-center p-8 relative overflow-hidden animate-in fade-in zoom-in duration-500">
+      // md:bg-[#f8f9fb] bg-white ensures it's flush white on mobile, but grey backdrop on desktop
+      <div className="min-h-screen bg-white md:bg-[#f8f9fb] font-sans md:flex md:items-center md:justify-center md:p-5">
+        
+        {/* min-h-screen on mobile ensures edge-to-edge height. md:min-h-0 md:h-[800px] constrains it on desktop */}
+        <div className="w-full min-h-screen md:min-h-0 md:h-[800px] bg-white md:max-w-[400px] md:rounded-[40px] md:shadow-2xl md:border-[8px] md:border-black flex flex-col items-center justify-center text-center p-8 relative overflow-hidden animate-in fade-in zoom-in duration-500">
           
           <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6">
             <CheckCircle2 className="w-12 h-12 text-green-500" />
@@ -153,8 +153,15 @@ const Checkout = () => {
               <span>Track My Order</span>
             </button>
 
+            {/* ✅ FIX 2: BULLETPROOF NAVIGATION */}
             <button 
-              onClick={() => navigate('/')} 
+              onClick={() => {
+                if (targetSlug) {
+                  navigate(`/${targetSlug}/menu`);
+                } else {
+                  navigate(-1); // Absolute fallback if both backend and state fail
+                }
+              }}
               className="w-full py-4 text-slate-400 font-bold text-[14px] hover:text-slate-600 transition-colors"
             >
               Back to Menu
@@ -219,7 +226,6 @@ const Checkout = () => {
                 <span className="font-semibold text-slate-800">{cartCurrency} {vatAmount.toFixed(2)}</span>
               </div>
               
-              {/* ✅ ADDED: Dynamic Delivery Fee Row */}
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500 font-medium">Delivery Fee</span>
                 <span className="font-semibold text-slate-800">
@@ -240,12 +246,10 @@ const Checkout = () => {
 
           <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
             
-            {/* ✅ NEW: Map Component Section */}
             <div className="space-y-3 mb-6">
               <h2 className="text-sm font-extrabold text-slate-900 px-1">1. Set Delivery Location</h2>
               <LocationPickerMap onLocationSelect={handleLocationSelect} />
               
-              {/* Error state if out of zone */}
               {deliveryError && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-100">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -253,7 +257,6 @@ const Checkout = () => {
                 </div>
               )}
               
-              {/* Success state if location is good */}
               {customerLocation && !deliveryError && !isCalculatingFee && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-xl text-xs font-bold border border-green-100">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
