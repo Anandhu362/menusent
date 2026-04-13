@@ -93,13 +93,19 @@ export const AdminSidebar = () => {
       {/* Dynamic Logo Area */}
       <div className={`h-20 flex items-center border-b border-slate-800/50 ${isExpanded ? 'px-8' : 'justify-center px-0'}`}>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-[#ff6b35] rounded-xl flex items-center justify-center shadow-lg shadow-[#ff6b35]/20 flex-shrink-0 overflow-hidden">
+          
+          {/* ✅ FIXED: Dynamic Background based on logo existence */}
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${
+            user?.logo ? 'bg-white shadow-sm' : 'bg-[#ff6b35] shadow-lg shadow-[#ff6b35]/20'
+          }`}>
              {user?.logo ? (
-               <img src={user.logo} alt={user?.name} className="w-full h-full object-cover" />
+               // ✅ FIXED: object-contain and padding so the logo fits perfectly inside the white box
+               <img src={user.logo} alt={user?.name} className="w-full h-full object-contain p-1" />
              ) : (
                <UtensilsCrossed className="h-6 w-6 text-white" />
              )}
           </div>
+
           {isExpanded && (
             <h1 className="text-xl font-bold tracking-tight whitespace-nowrap animate-in fade-in duration-300 truncate max-w-[160px]">
               {user?.name || "MenuSent"}
