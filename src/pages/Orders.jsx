@@ -3,6 +3,9 @@ import { AdminSidebar } from "../components/AdminSidebar";
 import { useAuth } from "../context/AuthContext";
 import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer } from "lucide-react";
 
+// ✅ Import your API client
+import apiClient from "../api/apiClient";
+
 // Print Utilities
 import { useReactToPrint } from "react-to-print";
 import { ReceiptPrinter } from "../components/ReceiptPrinter";
@@ -51,6 +54,9 @@ const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const audioRef = useRef(null);
+  
+  // ✅ NEW: Add a state to hold the live IP fetched directly from the database
+  const [livePrinterIp, setLivePrinterIp] = useState('192.168.1.220');
 
   // ==========================================
   // 🖨️ HYBRID PRINTING LOGIC (Web + Native)
@@ -79,9 +85,8 @@ const Orders = () => {
     try {
       console.log("🖨️ --- INITIATING SILENT PRINT ---");
       
-      // ✅ FIX 1: Dynamic IP Routing. 
-      // Pull this from the database/user settings, fallback to .220 for your current setup
-      const targetIp = user?.printerIp || '192.168.1.220'; 
+      // ✅ Use the state we just fetched
+      const targetIp = livePrinterIp; 
       console.log(`Connecting to Printer at ${targetIp}:9100...`);
 
       const connection = await TcpSocket.connect({
@@ -191,7 +196,6 @@ const Orders = () => {
       alert("Printer connection failed. Please ensure the printer is turned on, has paper, and the IP address matches your restaurant settings.");
     } finally {
       // ✅ FIX 2: BULLETPROOF CLEANUP
-      // This block executes NO MATTER WHAT. It prevents hanging sockets.
       if (clientId !== null) {
         try {
           await TcpSocket.disconnect({ client: clientId });
@@ -215,6 +219,20 @@ const Orders = () => {
 
   useEffect(() => {
     if (!restaurantId) return;
+
+    // ✅ NEW: Fetch the restaurant profile to guarantee we have the correct IP
+    const fetchRestaurantDetails = async () => {
+      try {
+        const res = await apiClient.get('/api/restaurants/owner/profile'); 
+        if (res.data && res.data.printerIp) {
+          setLivePrinterIp(res.data.printerIp);
+        }
+      } catch (error) {
+        console.error("Failed to fetch printer IP:", error);
+      }
+    };
+
+    fetchRestaurantDetails();
 
     const fetchInitialOrders = async () => {
       try {
@@ -245,7 +263,7 @@ const Orders = () => {
           audioRef.current.play().catch(() => {});
         }
 
-        // ✅ Notification strictly uses backend totalAmount
+        // Notification strictly uses backend totalAmount
         if (Capacitor.isNativePlatform()) {
           LocalNotifications.schedule({
             notifications: [
