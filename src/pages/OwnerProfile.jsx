@@ -28,6 +28,7 @@ const OwnerProfile = () => {
     name: "",
     location: "",
     whatsappNumber: "",
+    printerIp: "", // ✅ ADDED PRINTER IP STATE
   });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -53,6 +54,7 @@ const OwnerProfile = () => {
           name: data.name || "",
           location: data.fullAddress || "", // Text address
           whatsappNumber: data.whatsappNumber || "",
+          printerIp: data.printerIp || "192.168.1.220", // ✅ FETCH PRINTER IP
         });
         
         if (data.logoAssetId?.gcsPath) {
@@ -91,6 +93,8 @@ const OwnerProfile = () => {
       formData.append("name", profileData.name);
       formData.append("location", profileData.location);
       formData.append("whatsappNumber", profileData.whatsappNumber);
+      formData.append("printerIp", profileData.printerIp); // ✅ SEND PRINTER IP TO BACKEND
+      
       if (logoFile) {
         formData.append("logo", logoFile);
       }
@@ -255,6 +259,30 @@ const OwnerProfile = () => {
                           />
                         </div>
                       </div>
+
+                      {/* ✅ PRINTER IP SETTINGS BLOCK */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                          Local Printer IP Address
+                        </label>
+                        <div className="relative">
+                          {/* Generic network/wifi icon style */}
+                          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                          <input 
+                            type="text" 
+                            placeholder="e.g., 192.168.1.220"
+                            className="w-full bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-2xl pl-12 pr-4 py-3 outline-none font-bold text-slate-700 transition-all text-sm"
+                            value={profileData.printerIp}
+                            onChange={(e) => setProfileData({...profileData, printerIp: e.target.value})}
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-medium mt-1 ml-1">
+                          Must match the exact IP of your thermal printer.
+                        </p>
+                      </div>
+
                     </div>
 
                     <div className="pt-6 flex justify-end">
@@ -272,7 +300,7 @@ const OwnerProfile = () => {
                   </form>
                 </div>
 
-                {/* ✅ 2. NEW: Interactive Delivery Settings Component */}
+                {/* ✅ 2. Interactive Delivery Settings Component */}
                 <DeliverySettingsPanel 
                   initialData={restaurantData}
                   onSave={handleSaveDeliverySettings}
