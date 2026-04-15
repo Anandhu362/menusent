@@ -72,17 +72,24 @@ const Orders = () => {
     }
   }, [orderToPrint, handleWebPrint]);
 
-  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER
+  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER (BULLETPROOF VERSION)
   const printSilentlyOverWiFi = async (order) => {
+    let clientId = null; // Track client ID outside the try block for guaranteed cleanup
+
     try {
       console.log("🖨️ --- INITIATING SILENT PRINT ---");
-      console.log(`Connecting to Printer at 192.168.1.100:9100...`);
+      
+      // ✅ FIX 1: Dynamic IP Routing. 
+      // Pull this from the database/user settings, fallback to .220 for your current setup
+      const targetIp = user?.printerIp || '192.168.1.220'; 
+      console.log(`Connecting to Printer at ${targetIp}:9100...`);
 
       const connection = await TcpSocket.connect({
-        ipAddress: '192.168.1.100', // Your printer's IP
+        ipAddress: targetIp, 
         port: 9100
       });
-      const clientId = connection.client;
+      
+      clientId = connection.client;
       console.log(`✅ Socket Connected! Client ID: ${clientId}`);
 
       // --- HELPER FUNCTIONS FOR PERFECT 48-COLUMN ALIGNMENT ---
@@ -98,11 +105,11 @@ const Orders = () => {
       // --- HEADER SECTION ---
       receiptText += "\x1B\x61\x01"; // Center align
       receiptText += "\x1B\x45\x01"; // Bold ON
-      receiptText += "\x1D\x21\x11"; // Double height & width (Premium look)
-      receiptText += `${user?.name || "Grill Town Resturant"}\x0A`;
+      receiptText += "\x1D\x21\x11"; // Double height & width
+      receiptText += `${user?.name || "MenuSent Restaurant"}\x0A`;
       receiptText += "\x1D\x21\x00"; // Reset text size
       receiptText += "\x1B\x45\x00"; // Bold OFF
-      receiptText += "\x0A"; // Small gap
+      receiptText += "\x0A"; 
       
       if (user?.trn) receiptText += `TRN: ${user.trn}\x0A`;
       if (user?.address) receiptText += `${user.address}\x0A`;
@@ -118,31 +125,31 @@ const Orders = () => {
       receiptText += `Customer: ${order.customerName}\x0A`;
       receiptText += `Phone: ${order.customerPhone}\x0A`;
       if (order.deliveryAddress) {
-        // Safely formatted address for printer
         receiptText += `Address: ${formatAddress(order.deliveryAddress)}\x0A`;
       }
       receiptText += "------------------------------------------------\x0A";
 
       // --- ITEMS TABLE HEADER ---
-      receiptText += "\x1B\x45\x01"; // Bold ON
-      // Exact alignment: Qty (5 chars) + Item (35 chars) + Amt (8 chars) = 48 chars
+      receiptText += "\x1B\x45\x01"; 
       receiptText += "Qty  Item                                    Amt\x0A"; 
-      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += "\x1B\x45\x00"; 
       receiptText += "------------------------------------------------\x0A";
 
       // --- ITEMS LOOP ---
       order.items?.forEach(item => {
         const qtyStr = padRight(`${item.quantity}x`, 5);
-        // Truncate long names to 31 chars so they don't break the layout
         const itemName = item.name.length > 34 ? item.name.substring(0, 31) + "..." : item.name;
         const itemStr = padRight(itemName, 35);
         const priceStr = String((item.price * item.quantity).toFixed(2)).padStart(8, ' ');
         
         receiptText += `${qtyStr}${itemStr}${priceStr}\x0A`;
+        if(item.variantName) {
+           receiptText += `     (${item.variantName})\x0A`; // Print variant neatly under item
+        }
       });
       receiptText += "------------------------------------------------\x0A";
 
-      // --- FINANCIALS SECTION (Strictly using Database values) ---
+      // --- FINANCIALS SECTION ---
       const subtotal = order.subtotal || 0; 
       const vat = order.vat || 0;
       const delivery = order.deliveryCharge || order.deliveryFee || 0;
@@ -152,45 +159,47 @@ const Orders = () => {
       if (delivery > 0) receiptText += formatLine("Delivery:", delivery.toFixed(2));
 
       receiptText += "------------------------------------------------\x0A";
-      receiptText += "\x1B\x45\x01"; // Bold ON
+      receiptText += "\x1B\x45\x01"; 
       receiptText += formatLine("TOTAL:", `AED ${(order.totalAmount || 0).toFixed(2)}`);
-      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += "\x1B\x45\x00"; 
       receiptText += "------------------------------------------------\x0A";
 
       // --- FOOTER SECTION ---
-      receiptText += "\x1B\x61\x01"; // Center align
-      receiptText += "\x1B\x45\x01"; // Bold ON
+      receiptText += "\x1B\x61\x01"; 
+      receiptText += "\x1B\x45\x01"; 
       receiptText += "Thank you for your order!\x0A\x0A";
-      receiptText += "\x1B\x45\x00"; // Bold OFF
+      receiptText += "\x1B\x45\x00"; 
       
-      // ADSPRO WATERMARK (Using ESC/POS Font B for minimal professional look)
-      receiptText += "\x1B\x4D\x01"; // Switch to Mini Font
+      receiptText += "\x1B\x4D\x01"; 
       receiptText += "Powered by MenuSent\x0A";
-      receiptText += "System by Adspro Technologies\x0A";
-      receiptText += "\x1B\x4D\x00"; // Reset back to Standard Font
+      receiptText += "\x1B\x4D\x00"; 
       
-      receiptText += "\x0A\x0A\x0A\x0A\x0A"; // Feed paper forward before cutting
-      receiptText += "\x1D\x56\x41\x10"; // Cut paper command
+      receiptText += "\x0A\x0A\x0A\x0A\x0A"; // Feed paper
+      receiptText += "\x1D\x56\x41\x10"; // Cut paper
 
-      console.log("📝 EXACT RAW PAYLOAD BEING SENT TO PRINTER:");
-      console.log("------------------------------------------------");
-      console.log(receiptText.replace(/\x1B/g, '[ESC]').replace(/\x1D/g, '[GS]').replace(/\x0A/g, '[LF]\n'));
-      console.log("------------------------------------------------");
-
-      // Send the raw bytes to the printer silently
+      // Send the payload
       console.log("🚀 Transmitting data over TCP...");
       await TcpSocket.send({ 
         client: clientId, 
         data: receiptText 
       });
       
-      // Close the connection
-      await TcpSocket.disconnect({ client: clientId });
-      console.log("✅ Premium Print Success & Connection Closed!");
+      console.log("✅ Premium Print Success!");
 
     } catch (error) {
       console.error("❌ Native Print Error:", error);
-      alert("Printer connection failed. Is it turned on and on the same Wi-Fi?");
+      alert("Printer connection failed. Please ensure the printer is turned on, has paper, and the IP address matches your restaurant settings.");
+    } finally {
+      // ✅ FIX 2: BULLETPROOF CLEANUP
+      // This block executes NO MATTER WHAT. It prevents hanging sockets.
+      if (clientId !== null) {
+        try {
+          await TcpSocket.disconnect({ client: clientId });
+          console.log(`🧹 Socket ${clientId} forcefully disconnected and cleaned up.`);
+        } catch (disconnectError) {
+          console.error("⚠️ Failed to cleanly disconnect socket:", disconnectError);
+        }
+      }
     }
   };
 
