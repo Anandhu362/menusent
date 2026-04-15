@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Upload, Copy, Check, MapPin, Type, ExternalLink } from "lucide-react";
+// ✅ ADDED Wifi icon for the new IP input
+import { X, Upload, Copy, Check, MapPin, Type, ExternalLink, Wifi } from "lucide-react";
 import apiClient from "../api/apiClient";
 
 export const RestaurantEditPanel = ({ isOpen, onClose, restaurant, onUpdateSuccess }) => {
   const [name, setName] = useState("");
-  // --- FIX: Rename state to fullAddress ---
   const [fullAddress, setFullAddress] = useState("");
+  const [printerIp, setPrinterIp] = useState(""); // ✅ ADDED PRINTER IP STATE
+  
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -16,8 +18,8 @@ export const RestaurantEditPanel = ({ isOpen, onClose, restaurant, onUpdateSucce
   useEffect(() => {
     if (restaurant) {
       setName(restaurant.name || "");
-      // --- FIX: Pull from restaurant.fullAddress ---
       setFullAddress(restaurant.fullAddress || "");
+      setPrinterIp(restaurant.printerIp || "192.168.1.220"); // ✅ POPULATE PRINTER IP
       setLogoPreview(restaurant.logoAssetId?.gcsPath || "");
       setLogoFile(null);
     }
@@ -47,8 +49,8 @@ export const RestaurantEditPanel = ({ isOpen, onClose, restaurant, onUpdateSucce
       
       const formData = new FormData();
       formData.append("name", name);
-      // --- FIX: Append as fullAddress ---
       formData.append("fullAddress", fullAddress);
+      formData.append("printerIp", printerIp); // ✅ SEND PRINTER IP TO BACKEND
       
       if (logoFile) {
         formData.append("logo", logoFile);
@@ -121,13 +123,30 @@ export const RestaurantEditPanel = ({ isOpen, onClose, restaurant, onUpdateSucce
               <div className="relative">
                 <MapPin className="absolute left-4 top-3 h-4 w-4 text-gray-400" />
                 <textarea 
-                  // --- FIX: Bind to fullAddress ---
                   value={fullAddress} 
                   onChange={(e) => setFullAddress(e.target.value)} 
                   rows={3}
                   className="w-full bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-xl pl-11 pr-4 py-3 outline-none font-medium text-slate-700 transition-all text-sm resize-none"
                 />
               </div>
+            </div>
+
+            {/* ✅ ADDED PRINTER IP SETTINGS BLOCK */}
+            <div>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Local Printer IP Address</label>
+              <div className="relative">
+                <Wifi className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input 
+                  type="text" 
+                  value={printerIp} 
+                  onChange={(e) => setPrinterIp(e.target.value)} 
+                  placeholder="e.g., 192.168.1.220"
+                  className="w-full bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-xl pl-11 pr-4 py-3 outline-none font-bold text-slate-700 transition-all text-sm"
+                />
+              </div>
+              <p className="text-[10px] text-gray-400 font-medium mt-1 ml-1">
+                Must match the exact IP of the local thermal printer.
+              </p>
             </div>
 
             <div>
