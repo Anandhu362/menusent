@@ -1,5 +1,6 @@
 import React from "react";
 import { Plus, Star } from "lucide-react";
+import { getOptimizedImageUrl } from "../utils/imageHelpers"; // ✅ IMPORT THE NEW HELPER
 
 export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
   
@@ -50,8 +51,10 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
       {/* Premium Image Container */}
       <div className="relative w-full h-[110px] rounded-[14px] overflow-hidden mb-2 bg-gray-50">
         <img 
-          src={imageUrl} 
+          // ✅ USE THE OPTIMIZER HELPER HERE (Shrink to 400px width WebP)
+          src={getOptimizedImageUrl(imageUrl, 400)} 
           alt={item.name || "Menu item"} 
+          loading="lazy" // ✅ CRITICAL FOR PERFORMANCE: Only load when visible
           // Grayscale the image if it is out of stock
           className={`w-full h-full object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale opacity-60' : 'hover:scale-110'}`}
           onError={(e) => {
@@ -85,7 +88,7 @@ export const MenuItemCard = ({ item, onAddToCart, onSelectVariant }) => {
           {item.name}
         </h3>
 
-        {/* ✅ NEW: Item Description Display */}
+        {/* Item Description Display */}
         {item.description && (
           <p className={`text-[11px] font-medium mt-1 line-clamp-2 leading-tight ${isOutOfStock ? 'text-gray-400' : 'text-gray-500'}`}>
             {item.description}
