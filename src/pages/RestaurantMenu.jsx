@@ -189,20 +189,60 @@ const RestaurantMenu = () => {
             </div>
           </section>
 
+          {/* ✅ FIXED: CATEGORY-BASED ORDERING SECTION */}
           <section className="mt-4 px-4">
-            <h2 className="text-[18px] font-extrabold text-slate-900 mb-4">{searchQuery ? `Searching for "${searchQuery}"` : (activeCategory ? `Popular ${activeCategory.name}` : "All Menu Items")}</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {filteredItems.map((item) => (
-                <MenuItemCard 
-                  key={item._id} 
-                  item={item} 
-                  onAddToCart={addToCart} 
-                  onSelectVariant={handleSelectVariant} 
-                />
-              ))}
-              {filteredItems.length === 0 && <div className="col-span-2 text-center text-gray-400 py-6">No matching items found.</div>}
-            </div>
+            {searchQuery || activeCategory ? (
+              /* IF SEARCHING OR SPECIFIC CATEGORY SELECTED -> Show Single Grid */
+              <>
+                <h2 className="text-[18px] font-extrabold text-slate-900 mb-4">
+                  {searchQuery ? `Searching for "${searchQuery}"` : activeCategory.name}
+                </h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {filteredItems.map((item) => (
+                    <MenuItemCard 
+                      key={item._id} 
+                      item={item} 
+                      onAddToCart={addToCart} 
+                      onSelectVariant={handleSelectVariant} 
+                    />
+                  ))}
+                  {filteredItems.length === 0 && (
+                    <div className="col-span-2 text-center text-gray-400 py-6">No matching items found.</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* IF "ALL" IS SELECTED -> Loop through Categories and show grouped items */
+              <div className="flex flex-col gap-6">
+                {categories.map(category => {
+                  // Find items that belong to this specific category
+                  const categoryItems = filteredItems.filter(item => 
+                    (item.categoryId?._id || item.categoryId) === category._id
+                  );
+
+                  // Only render the category section if it actually has items inside it
+                  if (categoryItems.length === 0) return null;
+
+                  return (
+                    <div key={category._id} className="category-group">
+                      <h2 className="text-[18px] font-extrabold text-slate-900 mb-3">{category.name}</h2>
+                      <div className="grid grid-cols-2 gap-4">
+                        {categoryItems.map((item) => (
+                          <MenuItemCard 
+                            key={item._id} 
+                            item={item} 
+                            onAddToCart={addToCart} 
+                            onSelectVariant={handleSelectVariant} 
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
+
         </div>
 
         {cartItems.length > 0 && (

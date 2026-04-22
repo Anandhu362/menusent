@@ -55,8 +55,10 @@ const Orders = () => {
   const [loading, setLoading] = useState(true);
   const audioRef = useRef(null);
   
-  // ✅ NEW: Add a state to hold the live IP fetched directly from the database
+  // ✅ NEW: States to hold live IP, Phone, and Address fetched directly from the database
   const [livePrinterIp, setLivePrinterIp] = useState('192.168.1.220');
+  const [restaurantPhone, setRestaurantPhone] = useState(user?.phone || '');
+  const [restaurantAddress, setRestaurantAddress] = useState(user?.address || '');
 
   // ==========================================
   // 🖨️ HYBRID PRINTING LOGIC (Web + Native)
@@ -117,8 +119,16 @@ const Orders = () => {
       receiptText += "\x0A"; 
       
       if (user?.trn) receiptText += `TRN: ${user.trn}\x0A`;
-      if (user?.address) receiptText += `${user.address}\x0A`;
-      receiptText += `Tel: ${user?.phone || ""}\x0A`;
+      
+      // ✅ Use the fetched DB address here
+      if (restaurantAddress) {
+        receiptText += `${restaurantAddress}\x0A`;
+      } else if (user?.address) {
+        receiptText += `${user.address}\x0A`;
+      }
+
+      // ✅ Use the fetched DB phone number here
+      receiptText += `Tel: ${restaurantPhone || ""}\x0A`;
       receiptText += "------------------------------------------------\x0A";
 
       // --- ORDER DETAILS SECTION ---
@@ -177,6 +187,8 @@ const Orders = () => {
       
       receiptText += "\x1B\x4D\x01"; 
       receiptText += "Powered by MenuSent\x0A";
+      // ✅ Added the requested AdsPro Designing text
+      receiptText += "System by AdsPro Designing\x0A";
       receiptText += "\x1B\x4D\x00"; 
       
       receiptText += "\x0A\x0A\x0A\x0A\x0A"; // Feed paper
@@ -220,15 +232,17 @@ const Orders = () => {
   useEffect(() => {
     if (!restaurantId) return;
 
-    // ✅ NEW: Fetch the restaurant profile to guarantee we have the correct IP
+    // ✅ NEW: Fetch the restaurant profile to get the correct IP, DB Phone Number, and Address
     const fetchRestaurantDetails = async () => {
       try {
         const res = await apiClient.get('/api/restaurants/owner/profile'); 
-        if (res.data && res.data.printerIp) {
-          setLivePrinterIp(res.data.printerIp);
+        if (res.data) {
+          if (res.data.printerIp) setLivePrinterIp(res.data.printerIp);
+          if (res.data.phone) setRestaurantPhone(res.data.phone); // Extract phone from DB
+          if (res.data.fullAddress) setRestaurantAddress(res.data.fullAddress); // Extract address from DB
         }
       } catch (error) {
-        console.error("Failed to fetch printer IP:", error);
+        console.error("Failed to fetch printer IP, phone, and address:", error);
       }
     };
 

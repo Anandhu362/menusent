@@ -14,6 +14,7 @@ import {
 import { AdminSidebar } from "../components/AdminSidebar";
 import { SalesSummary } from "../components/SalesSummary";
 import { OrderToast } from "../components/OrderToast";
+import { SalesChartWidget } from "../components/SalesChartWidget"; // ✅ IMPORTED NEW WIDGET
 import { fetchDashboardStats } from "../api/order.api";
 import { useAuth } from "../context/AuthContext";
 
@@ -165,18 +166,29 @@ const RestaurantDashboard = () => {
       const newOrder = snapshot.val();
       if (!newOrder || processedOrders.current.has(newOrder.orderId)) return;
       
-      processedOrders.current.add(newOrder.orderId);
-      new Audio('/notification.mp3').play().catch(() => {});
-      setNewOrderToast({ orderId: newOrder.orderId, time: 'Just now' });
+      // ✅ FIX: Check if the order is actually new (e.g., placed within the last 3 minutes)
+      const orderTimestamp = newOrder.timestamp || new Date(newOrder.createdAt).getTime();
+      const isActuallyNew = (Date.now() - orderTimestamp) < (3 * 60 * 1000); // 3 minutes in milliseconds
 
-      setMetrics((prev) => {
-        const nOrders = (prev.totalOrders || 0) + 1;
-        const nSales = (prev.totalSales || 0) + (newOrder.totalAmount || 0);
-        return { ...prev, totalSales: nSales, totalOrders: nOrders, avgOrderValue: nSales / nOrders };
-      });
+      if (isActuallyNew) {
+        // It's a real new order, trigger UI and sound
+        processedOrders.current.add(newOrder.orderId);
+        new Audio('/notification.mp3').play().catch(() => {});
+        setNewOrderToast({ orderId: newOrder.orderId, time: 'Just now' });
 
-      setRecentOrders((prev) => [newOrder, ...prev].slice(0, 5));
+        setMetrics((prev) => {
+          const nOrders = (prev.totalOrders || 0) + 1;
+          const nSales = (prev.totalSales || 0) + (newOrder.totalAmount || 0);
+          return { ...prev, totalSales: nSales, totalOrders: nOrders, avgOrderValue: nSales / nOrders };
+        });
+
+        setRecentOrders((prev) => [newOrder, ...prev].slice(0, 5));
+      } else {
+        // It's an old order loaded on mount. Silently mark as processed so it doesn't trigger again.
+        processedOrders.current.add(newOrder.orderId);
+      }
     });
+    
     return () => unsubscribe();
   }, [user, isApiLoaded]);
 
@@ -335,8 +347,10 @@ const RestaurantDashboard = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                 <SalesSummary topItems={topItems} restaurantId={user?.restaurantId || user?._id} />
-                <div className="bg-transparent border-2 border-dashed border-gray-200 rounded-[20px] flex items-center justify-center p-6 min-h-[250px] text-gray-400 font-medium">
-                  + Add New Widget
+                
+                {/* ✅ The new Premium Chart Widget replacing the empty box */}
+                <div className="min-h-[300px]">
+                  <SalesChartWidget restaurantId={user?.restaurantId || user?._id} currency={currency} />
                 </div>
               </div>
             </>
