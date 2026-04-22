@@ -67,3 +67,18 @@ export const fetchDeliveryFee = async (payload) => {
   const response = await apiClient.post('/api/orders/calculate-fee', payload);
   return response.data;
 };
+
+/**
+ * ✅ NEW: Fetches the time-series data for the Sales Chart Widget.
+ * @param {string} restaurantId - The MongoDB ID of the restaurant
+ * @param {string} timeframe - 'weekly' or 'monthly'
+ */
+export const fetchSalesChartData = async (restaurantId, timeframe = 'weekly') => {
+  try {
+    const response = await apiClient.get(`/api/orders/chart/${restaurantId}?timeframe=${timeframe}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching chart data:", error);
+    return [];
+  }
+};
