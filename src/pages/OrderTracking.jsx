@@ -14,7 +14,7 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
 };
 
-// ✅ 2. Safe Singleton Initialization (Prevents "Duplicate App" silent crashes)
+// ✅ 2. Safe Singleton Initialization
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getDatabase(app);
 
@@ -37,25 +37,18 @@ const OrderTracking = () => {
 
         if (restaurantId) {
           const statusRef = ref(db, `live-orders/${restaurantId}`);
-          console.log("👂 3. Attaching Firebase Listener to:", `live-orders/${restaurantId}`);
-
-          // ✅ 3. Added error callback to catch silent permission/connection failures
+          
           unsubscribe = onValue(
             statusRef, 
             (snapshot) => {
-              console.log("🔥 4. FIREBASE DATA RECEIVED! Exists:", snapshot.exists());
               const liveData = snapshot.val();
-              
               if (liveData) {
                 const remoteOrder = Object.values(liveData).find(o => o._id === orderId);
                 if (remoteOrder) {
-                  console.log("✅ 5. Order found in Firebase. Updating status to:", remoteOrder.orderStatus);
                   setOrder(prev => ({ 
                     ...prev, 
                     orderStatus: remoteOrder.orderStatus 
                   }));
-                } else {
-                  console.warn("❌ 5. Order NOT found in live data. Looking for _id:", orderId);
                 }
               }
             },
@@ -72,10 +65,7 @@ const OrderTracking = () => {
     fetchAndListen();
 
     return () => {
-      if (unsubscribe) {
-        console.log("🧹 Detaching Firebase Listener");
-        unsubscribe();
-      }
+      if (unsubscribe) unsubscribe();
     };
   }, [orderId]);
 
@@ -158,6 +148,7 @@ const OrderTracking = () => {
               })}
             </div>
 
+            {/* Delivery Address Section */}
             <div className="bg-slate-50 rounded-[24px] p-5 border border-gray-100">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-sm border border-gray-100">
@@ -175,6 +166,7 @@ const OrderTracking = () => {
               </div>
             </div>
 
+            {/* Order Summary Section */}
             <div className="bg-white border border-gray-100 rounded-[24px] p-5 space-y-4 mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <Receipt size={16} className="text-[#ff6d33]" />
@@ -201,7 +193,6 @@ const OrderTracking = () => {
                   <span>{subtotal.toFixed(2)}</span>
                 </div>
                 
-                {/* ✅ ADDED: Delivery Fee */}
                 <div className="flex justify-between text-xs font-bold text-slate-400">
                   <span>Delivery Fee</span>
                   <span>{(order.deliveryFee || 0).toFixed(2)}</span>
@@ -222,9 +213,10 @@ const OrderTracking = () => {
           </div>
         </div>
 
+        {/* ✅ FIXED: Dynamic Call Restaurant Button */}
         <div className="p-6 bg-white border-t border-gray-50">
           <a 
-            href={`tel:${order.customerPhone || ""}`} 
+            href={`tel:${order.restaurantId?.whatsappNumber || ""}`} 
             className="w-full py-4 bg-slate-900 text-white rounded-[20px] font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-slate-200 active:scale-95 transition-transform"
           >
             <Phone size={18} /> 
