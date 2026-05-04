@@ -1,24 +1,24 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AdminSidebar } from "../components/AdminSidebar";
 import { useAuth } from "../context/AuthContext";
-import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer } from "lucide-react";
+import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer, Bluetooth, BluetoothConnected, BluetoothOff, X, RefreshCw } from "lucide-react";
 
-// ✅ Import your API client
+// API & Firebase
 import apiClient from "../api/apiClient";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
+import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
 
 // Print Utilities
 import { useReactToPrint } from "react-to-print";
 import { ReceiptPrinter } from "../components/ReceiptPrinter";
 
-// Firebase
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
-import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
-
-// ✅ Import Capacitor Native Tools
+// Native Tools
 import { Capacitor } from '@capacitor/core';
-import { TcpSocket } from 'capacitor-tcp-socket';
 import { LocalNotifications } from '@capacitor/local-notifications';
+
+// ✅ Import the new Printer Context
+import { usePrinter } from "../context/PrinterContext";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -30,7 +30,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Smart Address Formatter to prevent React Object crashes
+// Smart Address Formatter (Kept for UI display)
 const formatAddress = (addr) => {
   if (!addr) return "";
   if (typeof addr === "string") return addr;
@@ -39,8 +39,6 @@ const formatAddress = (addr) => {
     if (addr.building) parts.push(addr.building);
     if (addr.apt) parts.push(`Apt/Villa ${addr.apt}`);
     if (addr.landmark) parts.push(`Near ${addr.landmark}`);
-    
-    // Fallback just in case keys are named differently
     if (parts.length === 0) return Object.values(addr).filter(Boolean).join(", ");
     return parts.join(", ");
   }
@@ -51,22 +49,30 @@ const Orders = () => {
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
 
+  // ✅ Consume Printer Context variables and functions
+  const { 
+    btConnectionStatus, 
+    pairedDevices, 
+    showDeviceModal, 
+    setShowDeviceModal, 
+    scanForPrinters, 
+    connectToSelectedPrinter, 
+    disconnectPrinter, 
+    triggerPrint 
+  } = usePrinter();
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const audioRef = useRef(null);
   
-  // ✅ NEW: States to hold live IP, Phone, and Address fetched directly from the database
-  const [livePrinterIp, setLivePrinterIp] = useState('192.168.1.220');
+  // ✅ Removed hardcoded IP. It will now fetch dynamically from DB.
+  const [livePrinterIp, setLivePrinterIp] = useState('');
   const [restaurantPhone, setRestaurantPhone] = useState(user?.phone || '');
   const [restaurantAddress, setRestaurantAddress] = useState(user?.address || '');
 
-  // ==========================================
-  // 🖨️ HYBRID PRINTING LOGIC (Web + Native)
-  // ==========================================
   const [orderToPrint, setOrderToPrint] = useState(null);
   const printComponentRef = useRef(null);
 
-  // 1. Web Fallback Printer
   const handleWebPrint = useReactToPrint({
     contentRef: printComponentRef,
     documentTitle: "Order_Receipt",
@@ -80,169 +86,35 @@ const Orders = () => {
     }
   }, [orderToPrint, handleWebPrint]);
 
-  // 2. ✅ PREMIUM NATIVE ESC/POS PRINTER (BULLETPROOF VERSION)
-  const printSilentlyOverWiFi = async (order) => {
-    let clientId = null; // Track client ID outside the try block for guaranteed cleanup
+  // ✅ Centralized Print Handler interacting with Context
+  const handlePrintRequest = async (order) => {
+    const printMethod = await triggerPrint(order, {
+      user,
+      restaurantAddress,
+      restaurantPhone,
+      livePrinterIp
+    });
 
-    try {
-      console.log("🖨️ --- INITIATING SILENT PRINT ---");
-      
-      // ✅ Use the state we just fetched
-      const targetIp = livePrinterIp; 
-      console.log(`Connecting to Printer at ${targetIp}:9100...`);
-
-      const connection = await TcpSocket.connect({
-        ipAddress: targetIp, 
-        port: 9100
-      });
-      
-      clientId = connection.client;
-      console.log(`✅ Socket Connected! Client ID: ${clientId}`);
-
-      // --- HELPER FUNCTIONS FOR PERFECT 48-COLUMN ALIGNMENT ---
-      const padRight = (text, length) => String(text).padEnd(length, ' ').substring(0, length);
-      const formatLine = (label, value) => {
-        const valStr = String(value);
-        const spaces = 48 - label.length - valStr.length;
-        return spaces > 0 ? label + " ".repeat(spaces) + valStr + "\x0A" : label + " " + valStr + "\x0A";
-      };
-
-      let receiptText = "\x1B\x40"; // Initialize printer
-
-      // --- HEADER SECTION ---
-      receiptText += "\x1B\x61\x01"; // Center align
-      receiptText += "\x1B\x45\x01"; // Bold ON
-      receiptText += "\x1D\x21\x11"; // Double height & width
-      receiptText += `${user?.name || "MenuSent Restaurant"}\x0A`;
-      receiptText += "\x1D\x21\x00"; // Reset text size
-      receiptText += "\x1B\x45\x00"; // Bold OFF
-      receiptText += "\x0A"; 
-      
-      if (user?.trn) receiptText += `TRN: ${user.trn}\x0A`;
-      
-      // ✅ Use the fetched DB address here
-      if (restaurantAddress) {
-        receiptText += `${restaurantAddress}\x0A`;
-      } else if (user?.address) {
-        receiptText += `${user.address}\x0A`;
-      }
-
-      // ✅ Use the fetched DB phone number here
-      receiptText += `Tel: ${restaurantPhone || ""}\x0A`;
-      receiptText += "------------------------------------------------\x0A";
-
-      // --- ORDER DETAILS SECTION ---
-      receiptText += "\x1B\x61\x00"; // Left align
-      receiptText += "\x1B\x45\x01"; // Bold ON
-      receiptText += `Order ID: ${order.orderId}\x0A`;
-      receiptText += "\x1B\x45\x00"; // Bold OFF
-      receiptText += `Date: ${new Date(order.createdAt).toLocaleString()}\x0A`;
-      receiptText += `Customer: ${order.customerName}\x0A`;
-      receiptText += `Phone: ${order.customerPhone}\x0A`;
-      if (order.deliveryAddress) {
-        receiptText += `Address: ${formatAddress(order.deliveryAddress)}\x0A`;
-      }
-      receiptText += "------------------------------------------------\x0A";
-
-      // --- ITEMS TABLE HEADER ---
-      receiptText += "\x1B\x45\x01"; 
-      receiptText += "Qty  Item                                    Amt\x0A"; 
-      receiptText += "\x1B\x45\x00"; 
-      receiptText += "------------------------------------------------\x0A";
-
-      // --- ITEMS LOOP ---
-      order.items?.forEach(item => {
-        const qtyStr = padRight(`${item.quantity}x`, 5);
-        const itemName = item.name.length > 34 ? item.name.substring(0, 31) + "..." : item.name;
-        const itemStr = padRight(itemName, 35);
-        const priceStr = String((item.price * item.quantity).toFixed(2)).padStart(8, ' ');
-        
-        receiptText += `${qtyStr}${itemStr}${priceStr}\x0A`;
-        if(item.variantName) {
-           receiptText += `     (${item.variantName})\x0A`; // Print variant neatly under item
-        }
-      });
-      receiptText += "------------------------------------------------\x0A";
-
-      // --- FINANCIALS SECTION ---
-      const subtotal = order.subtotal || 0; 
-      const vat = order.vat || 0;
-      const delivery = order.deliveryCharge || order.deliveryFee || 0;
-
-      receiptText += formatLine("Subtotal:", subtotal.toFixed(2));
-      if (vat > 0) receiptText += formatLine("VAT (5%):", vat.toFixed(2));
-      if (delivery > 0) receiptText += formatLine("Delivery:", delivery.toFixed(2));
-
-      receiptText += "------------------------------------------------\x0A";
-      receiptText += "\x1B\x45\x01"; 
-      receiptText += formatLine("TOTAL:", `AED ${(order.totalAmount || 0).toFixed(2)}`);
-      receiptText += "\x1B\x45\x00"; 
-      receiptText += "------------------------------------------------\x0A";
-
-      // --- FOOTER SECTION ---
-      receiptText += "\x1B\x61\x01"; 
-      receiptText += "\x1B\x45\x01"; 
-      receiptText += "Thank you for your order!\x0A\x0A";
-      receiptText += "\x1B\x45\x00"; 
-      
-      receiptText += "\x1B\x4D\x01"; 
-      receiptText += "Powered by MenuSent\x0A";
-      // ✅ Added the requested AdsPro Designing text
-      receiptText += "System by AdsPro Designing\x0A";
-      receiptText += "\x1B\x4D\x00"; 
-      
-      receiptText += "\x0A\x0A\x0A\x0A\x0A"; // Feed paper
-      receiptText += "\x1D\x56\x41\x10"; // Cut paper
-
-      // Send the payload
-      console.log("🚀 Transmitting data over TCP...");
-      await TcpSocket.send({ 
-        client: clientId, 
-        data: receiptText 
-      });
-      
-      console.log("✅ Premium Print Success!");
-
-    } catch (error) {
-      console.error("❌ Native Print Error:", error);
-      alert("Printer connection failed. Please ensure the printer is turned on, has paper, and the IP address matches your restaurant settings.");
-    } finally {
-      // ✅ FIX 2: BULLETPROOF CLEANUP
-      if (clientId !== null) {
-        try {
-          await TcpSocket.disconnect({ client: clientId });
-          console.log(`🧹 Socket ${clientId} forcefully disconnected and cleaned up.`);
-        } catch (disconnectError) {
-          console.error("⚠️ Failed to cleanly disconnect socket:", disconnectError);
-        }
-      }
+    // Fallback to web print (react-to-print) if not on a native device
+    if (printMethod === "WEB") {
+      setOrderToPrint(order);
     }
   };
-
-  // 3. Main trigger function
-  const triggerPrint = (order) => {
-    if (Capacitor.isNativePlatform()) {
-      printSilentlyOverWiFi(order); 
-    } else {
-      setOrderToPrint(order); 
-    }
-  };
-  // ==========================================
 
   useEffect(() => {
     if (!restaurantId) return;
 
-    // ✅ NEW: Fetch the restaurant profile to get the correct IP, DB Phone Number, and Address
+    // Fetch dynamic printer IP and restaurant details
     const fetchRestaurantDetails = async () => {
       try {
         const res = await apiClient.get('/api/restaurants/owner/profile'); 
         if (res.data) {
           if (res.data.printerIp) setLivePrinterIp(res.data.printerIp);
-          if (res.data.phone) setRestaurantPhone(res.data.phone); // Extract phone from DB
-          if (res.data.fullAddress) setRestaurantAddress(res.data.fullAddress); // Extract address from DB
+          if (res.data.phone) setRestaurantPhone(res.data.phone);
+          if (res.data.fullAddress) setRestaurantAddress(res.data.fullAddress);
         }
       } catch (error) {
-        console.error("Failed to fetch printer IP, phone, and address:", error);
+        console.error("Failed to fetch profile info:", error);
       }
     };
 
@@ -271,13 +143,11 @@ const Orders = () => {
       setOrders((prevOrders) => {
         if (prevOrders.some(o => o._id === newOrder._id)) return prevOrders;
 
-        // Play the audio sound
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(() => {});
         }
 
-        // Notification strictly uses backend totalAmount
         if (Capacitor.isNativePlatform()) {
           LocalNotifications.schedule({
             notifications: [
@@ -309,10 +179,9 @@ const Orders = () => {
       );
       await updateOrderStatus(orderId, newStatus);
 
-      // Trigger print automatically ONLY when the owner clicks "Accept"
       if (newStatus === "Accepted") {
         console.log(`👉 Order ${order.orderId} Accepted! Triggering print...`);
-        triggerPrint({ ...order, orderStatus: newStatus });
+        handlePrintRequest({ ...order, orderStatus: newStatus });
       }
 
     } catch (error) {
@@ -335,24 +204,48 @@ const Orders = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-[#f8f9fb] font-sans">
+    <div className="flex h-screen bg-[#f8f9fb] font-sans relative">
       
-      {/* INVISIBLE WEB PRINTER COMPONENT (Only used on PC) */}
       <ReceiptPrinter ref={printComponentRef} order={orderToPrint} restaurant={user} />
-
       <audio ref={audioRef} src="/notification.mp3" preload="auto" className="hidden" />
       <AdminSidebar />
+      
       <main className="flex-1 h-full overflow-y-auto relative z-10">
+        
+        {/* HEADER WITH DYNAMIC BLUETOOTH BUTTON */}
         <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <h2 className="text-2xl font-bold text-slate-900">Live Orders</h2>
+          
+          {Capacitor.isNativePlatform() && (
+            <button 
+              onClick={btConnectionStatus === "Connected" ? disconnectPrinter : scanForPrinters}
+              disabled={btConnectionStatus === "Scanning..." || btConnectionStatus === "Connecting"}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                btConnectionStatus === "Connected" 
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200" 
+                  : btConnectionStatus.includes("ing")
+                  ? "bg-yellow-100 text-yellow-700 cursor-wait"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              {btConnectionStatus === "Connected" && <BluetoothConnected className="h-5 w-5" />}
+              {btConnectionStatus.includes("ing") && <RefreshCw className="h-5 w-5 animate-spin" />}
+              {btConnectionStatus === "Disconnected" && <BluetoothOff className="h-5 w-5" />}
+              
+              <span>
+                {btConnectionStatus === "Connected" ? "Disconnect Printer" : 
+                 btConnectionStatus === "Scanning..." ? "Scanning..." : 
+                 btConnectionStatus === "Connecting" ? "Connecting..." : 
+                 "Connect Printer"}
+              </span>
+            </button>
+          )}
         </header>
 
         <div className="p-4 md:p-6 max-w-full mx-auto h-[calc(100vh-80px)]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full pb-4">
-            
             {columns.map((col) => {
               const columnOrders = orders.filter(o => o.orderStatus === col.status);
-
               return (
                 <div key={col.status} className="flex flex-col bg-gray-50/50 rounded-2xl border border-gray-100 h-full overflow-hidden">
                   <div className={`p-3 border-b ${col.border} ${col.bg} flex items-center justify-between`}>
@@ -378,7 +271,6 @@ const Orders = () => {
                               <Phone className="h-3 w-3 text-slate-400 shrink-0" /> 
                               <span>{order.customerPhone}</span>
                             </div>
-                            {/* Safely formatted address for UI rendering */}
                             {order.deliveryAddress && (
                               <div className="flex items-start gap-1 text-[11px] text-gray-500 font-medium">
                                 <MapPin className="h-3 w-3 text-slate-400 mt-0.5 shrink-0" /> 
@@ -397,37 +289,28 @@ const Orders = () => {
                         </div>
 
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
-                          {/* ✅ UI CARD NOW TRUSTS THE BACKEND DATABASE TOTAL */}
                           <span className="font-black text-sm text-slate-900">
                             {order.items && order.items.length > 0 ? order.items[0].currency : 'AED'} {(order.totalAmount || 0).toFixed(2)}
                           </span>
                           
                           <div className="flex gap-1 items-center">
-                            
-                            {/* MANUAL PRINT BUTTON */}
                             <button 
-                              onClick={() => {
-                                console.log(`👉 Manual Print Clicked for Order: ${order.orderId}`);
-                                triggerPrint(order);
-                              }}
+                              onClick={() => handlePrintRequest(order)}
                               title="Print Receipt"
                               className="p-1.5 rounded-lg text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors mr-1"
                             >
                               <Printer className="h-4 w-4" />
                             </button>
 
-                            {/* ACTION BUTTONS */}
                             {col.status === "Pending" && (
                               <>
                                 <button onClick={() => handleStatusChange(order, "Cancelled")} className="p-1.5 rounded-lg text-red-500 bg-red-50 hover:bg-red-100"><Check className="h-4 w-4 rotate-45" /></button>
                                 <button onClick={() => handleStatusChange(order, "Accepted")} className="text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600">Accept</button>
                               </>
                             )}
-
                             {col.status === "Accepted" && (
                               <button onClick={() => handleStatusChange(order, "Out for Delivery")} className="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-blue-500 hover:bg-blue-600"><Truck className="h-3 w-3" /> Dispatch</button>
                             )}
-
                             {col.status === "Out for Delivery" && (
                               <button onClick={() => handleStatusChange(order, "Delivered")} className="flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 rounded-lg text-white bg-slate-700 hover:bg-slate-800"><Check className="h-3 w-3" /> Delivered</button>
                             )}
@@ -442,6 +325,50 @@ const Orders = () => {
           </div>
         </div>
       </main>
+
+      {/* 📱 BLUETOOTH DEVICE SELECTOR MODAL */}
+      {showDeviceModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                <Bluetooth className="h-5 w-5 text-blue-500" />
+                Select Printer
+              </h3>
+              <button onClick={() => setShowDeviceModal(false)} className="p-1 rounded-lg hover:bg-slate-200 text-slate-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-2 overflow-y-auto flex-1">
+              {pairedDevices.length === 0 ? (
+                <div className="p-6 text-center text-slate-500">
+                  <p>No paired devices found.</p>
+                  <p className="text-xs mt-2">Go to Android Settings &gt; Bluetooth to pair your printer first.</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {pairedDevices.map((device, index) => (
+                    <button
+                      key={index}
+                      onClick={() => connectToSelectedPrinter(device.address || device.id)}
+                      className="w-full text-left p-3 rounded-xl hover:bg-blue-50 flex flex-col transition-colors border border-transparent hover:border-blue-100"
+                    >
+                      <span className="font-bold text-slate-800">{device.name || "Unknown Device"}</span>
+                      <span className="text-xs text-slate-500 font-mono">{device.address || device.id}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t bg-slate-50 flex justify-between items-center text-xs text-slate-500">
+              <span>Ensure printer is turned on</span>
+              <button onClick={scanForPrinters} className="font-semibold text-blue-600 hover:text-blue-800">Refresh List</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
