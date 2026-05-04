@@ -13,4 +13,11 @@ export default defineConfig({
       usePolling: true, // Better for network-shared development
     }
   },
+  // ✅ ADDED THIS BLOCK TO FIX VERCEL DEPLOYMENT
+  build: {
+    rollupOptions: {
+      // Tells Vercel/Vite to ignore the native bluetooth plugin during the web build
+      external: ['@awesome-cordova-plugins/bluetooth-serial']
+    }
+  }
 })
