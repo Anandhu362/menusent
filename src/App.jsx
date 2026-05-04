@@ -27,7 +27,10 @@ import apiClient from "./api/apiClient";
 
 // Context Providers
 import { CartProvider } from "./context/CartContext";
-import { AuthProvider } from "./context/AuthContext"; // Verified consistent naming
+import { AuthProvider } from "./context/AuthContext"; 
+
+// ✅ NEW: Import the Printer Provider
+import { PrinterProvider } from "./context/PrinterContext"; 
 
 const MenuExperience = () => {
   const { slug } = useParams(); 
@@ -94,91 +97,94 @@ function App() {
   return (
     <div className="relative min-h-screen w-full bg-background">
       <AuthProvider>
-        <CartProvider>
-          <BrowserRouter>
-            <Routes>
-              {/* --- Public Landing --- */}
-              <Route path="/" element={<Home />} />
-              
-              {/* --- Authentication --- */}
-              <Route path="/login" element={<Login />} />
-              
-              {/* --- Protected Restaurant Owner Routes --- */}
-              <Route 
-                path="/restaurant/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <RestaurantDashboard />
-                  </ProtectedRoute>
-                } 
-              />
+        {/* ✅ Wrap the app with PrinterProvider here so hardware connection survives page reloads/routing */}
+        <PrinterProvider>
+          <CartProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* --- Public Landing --- */}
+                <Route path="/" element={<Home />} />
+                
+                {/* --- Authentication --- */}
+                <Route path="/login" element={<Login />} />
+                
+                {/* --- Protected Restaurant Owner Routes --- */}
+                <Route 
+                  path="/restaurant/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <RestaurantDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
 
-              <Route 
-                path="/restaurant/profile" 
-                element={
-                  <ProtectedRoute>
-                    <OwnerProfile />
-                  </ProtectedRoute>
-                } 
-              />
+                <Route 
+                  path="/restaurant/profile" 
+                  element={
+                    <ProtectedRoute>
+                      <OwnerProfile />
+                    </ProtectedRoute>
+                  } 
+                />
 
-              <Route 
-                path="/restaurant/orders" 
-                element={
-                  <ProtectedRoute>
-                    <Orders />
-                  </ProtectedRoute>
-                } 
-              />
+                <Route 
+                  path="/restaurant/orders" 
+                  element={
+                    <ProtectedRoute>
+                      <Orders />
+                    </ProtectedRoute>
+                  } 
+                />
 
-              <Route 
-                path="/restaurant/menu-management" 
-                element={
-                  <ProtectedRoute>
-                    <MenuManagement />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/restaurant/tables" 
-                element={
-                  <ProtectedRoute>
-                    <TableManagement />
-                  </ProtectedRoute>
-                } 
-              /> 
-              
-              <Route 
-                path="/restaurant/settings" 
-                element={
-                  <ProtectedRoute>
-                    <RestaurantSettings />
-                  </ProtectedRoute>
-                } 
-              />
+                <Route 
+                  path="/restaurant/menu-management" 
+                  element={
+                    <ProtectedRoute>
+                      <MenuManagement />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/restaurant/tables" 
+                  element={
+                    <ProtectedRoute>
+                      <TableManagement />
+                    </ProtectedRoute>
+                  } 
+                /> 
+                
+                <Route 
+                  path="/restaurant/settings" 
+                  element={
+                    <ProtectedRoute>
+                      <RestaurantSettings />
+                    </ProtectedRoute>
+                  } 
+                />
 
-              <Route 
-                path="/admin" 
-                element={
-                  <ProtectedRoute>
-                    <Admin />
-                  </ProtectedRoute>
-                } 
-              />
+                <Route 
+                  path="/admin" 
+                  element={
+                    <ProtectedRoute>
+                      <Admin />
+                    </ProtectedRoute>
+                  } 
+                />
 
-              {/* --- Public Customer Experience Routes --- */}
-              
-              {/* ✅ NEW: Public Order Tracking route (Mobile Optimized) */}
-              <Route path="/track/:orderId" element={<OrderTracking />} />
+                {/* --- Public Customer Experience Routes --- */}
+                
+                {/* ✅ NEW: Public Order Tracking route (Mobile Optimized) */}
+                <Route path="/track/:orderId" element={<OrderTracking />} />
 
-              <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout" element={<Checkout />} />
 
-              <Route path="/:slug/menu" element={<RestaurantMenu />} />
+                <Route path="/:slug/menu" element={<RestaurantMenu />} />
 
-              <Route path="/:slug" element={<MenuExperience />} />
-            </Routes>
-          </BrowserRouter>
-        </CartProvider>
+                <Route path="/:slug" element={<MenuExperience />} />
+              </Routes>
+            </BrowserRouter>
+          </CartProvider>
+        </PrinterProvider>
       </AuthProvider>
     </div>
   );
