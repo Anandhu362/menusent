@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@awesome-cordova-plugins/bluetooth-serial": "^9.1.4",
+    "@awesome-cordova-plugins/core": "^9.1.4",
     "@capacitor/android": "^8.3.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
@@ -23,6 +25,7 @@
     "autoprefixer": "^10.4.19",
     "axios": "^1.13.2",
     "capacitor-tcp-socket": "^7.1.0",
+    "cordova-plugin-bluetooth-serial": "^0.4.7",
     "firebase": "^12.11.0",
     "jotai": "^2.8.4",
     "leva": "^0.9.35",
