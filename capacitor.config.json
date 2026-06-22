@@ -1,14 +1,5 @@
 {
   "appId": "com.menusent.pos",
   "appName": "MenuSent Admin",
-  "webDir": "dist",
-  "server": {
-    "url": "https://www.menusent.com/login",
-    "cleartext": true,
-    "errorPath": "offline.html",
-    "allowNavigation": [
-      "menusent.com",
-      "*.menusent.com"
-    ]
-  }
+  "webDir": "dist"
 }

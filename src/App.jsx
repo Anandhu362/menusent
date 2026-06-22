@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams, Navigate } from "react-router-dom";
+import { Capacitor } from '@capacitor/core';
 
 // Components
 import { UI } from "./components/UI";
@@ -124,7 +125,14 @@ function App() {
             <BrowserRouter>
               <Routes>
                 {/* --- Public Landing --- */}
-                <Route path="/" element={<Home />} />
+                <Route 
+                  path="/" 
+                  element={
+                    Capacitor.isNativePlatform() 
+                      ? <Navigate to="/login" replace /> 
+                      : <Home />
+                  } 
+                />
                 
                 {/* --- Authentication --- */}
                 <Route path="/login" element={<Login />} />
