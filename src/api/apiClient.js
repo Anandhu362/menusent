@@ -1,14 +1,21 @@
 import axios from 'axios';
 
-// 1. USE YOUR DYNAMIC ENVIRONMENT VARIABLE HERE
-// This tells the app to look at your .env file locally, or your Vercel settings in production!
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; 
+// Get the URL from the environment variables
+let envUrl = import.meta.env.VITE_API_BASE_URL || '';
+
+// Smart Clean: If the URL already ends with '/api', strip it off 
+// so it doesn't conflict with local request paths like '/api/auth/login'
+if (envUrl.endsWith('/api')) {
+  envUrl = envUrl.slice(0, -4);
+} else if (envUrl.endsWith('/api/')) {
+  envUrl = envUrl.slice(0, -5);
+}
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: envUrl,
 });
 
-// NEW: Add a request interceptor to automatically attach the JWT token
+// Add a request interceptor to automatically attach the JWT token
 apiClient.interceptors.request.use(
   (config) => {
     // 1. Grab the token from the browser's storage
