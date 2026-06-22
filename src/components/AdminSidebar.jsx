@@ -28,10 +28,11 @@ export const AdminSidebar = () => {
     { label: "Overview", icon: LayoutDashboard, path: "/restaurant/dashboard" },
   ];
 
-  // Only show Orders and Table Management to Restaurant Owners
+  // Only show Orders to Restaurant Owners
   if (user?.role === 'restaurant') {
     navItems.push({ label: "Orders", icon: ShoppingBag, path: "/restaurant/orders" });
-    navItems.push({ label: "Table Management", icon: LayoutGrid, path: "/restaurant/tables" });
+    // TEMPORARILY DISABLED: Table Management not needed right now
+    // navItems.push({ label: "Table Management", icon: LayoutGrid, path: "/restaurant/tables" });
   }
 
   // Both Admin and Restaurant get Menu Management
@@ -61,7 +62,7 @@ export const AdminSidebar = () => {
 
   // Reusable Item Component
   const NavItem = ({ item }) => {
-    // ✅ FIXED: Now safely keeps the parent menu item highlighted when navigating to nested child routes
+    // Safely keeps the parent menu item highlighted when navigating to nested child routes
     const isActive = 
       location.pathname === item.path || 
       (item.path !== '/' && item.path !== '#' && location.pathname.startsWith(`${item.path}/`));
