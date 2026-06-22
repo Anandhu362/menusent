@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connection Lost</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: #1e293b;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 3rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            text-align: center;
+            max-width: 400px;
+        }
+        h2 { margin-top: 0; color: #ef4444; }
+        p { color: #64748b; margin-bottom: 2rem; line-height: 1.5; }
+        .spinner {
+            margin: 0 auto 1.5rem auto;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #f97316;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        button {
+            background: #1e293b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="spinner"></div>
+        <h2>System Offline</h2>
+        <p>MenuSent cannot connect to the server. We are actively scanning for a network connection...</p>
+        
+        <button onclick="openWifiSettings()">Configure Wi-Fi Network</button>
+    </div>
+
+    <script>
+        function openWifiSettings() {
+            try {
+                // Access the raw Android bridge we injected in MainActivity.java
+                if (window.NativeKiosk) {
+                    window.NativeKiosk.openWifi();
+                } else {
+                    alert("Fatal Error: Android Native Bridge missing.");
+                }
+            } catch (error) {
+                console.error("Failed to open Wi-Fi panel:", error);
+            }
+        }
+
+        // Auto-Reload Logic: Ping the server every 5 seconds
+        setInterval(() => {
+            fetch('https://www.menusent.com/login', { mode: 'no-cors', cache: 'no-store' })
+                .then(() => {
+                    // If the ping succeeds, the network is back! Reload the app.
+                    window.location.href = 'https://www.menusent.com/login';
+                })
+                .catch(() => {
+                    // Network still down, do nothing, let it keep spinning
+                    console.log("Still offline, waiting for connection...");
+                });
+        }, 5000);
+    </script>
+
+</body>
+</html>
