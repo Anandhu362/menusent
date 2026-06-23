@@ -282,6 +282,14 @@ const Orders = () => {
                           ))}
                         </div>
 
+                        {/* ✅ PROMO TAG CONDITIONAL RENDERING */}
+                        {order.appliedPromoCode && (
+                          <div className="flex items-center gap-1 bg-green-50 text-emerald-600 px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wide mb-3 border border-green-100 w-fit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-tag"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+                            Promo: {order.appliedPromoCode} (-{order.items && order.items.length > 0 ? order.items[0].currency : 'AED'} {order.discountAmount?.toFixed(2)})
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
                           <span className="font-black text-sm text-slate-900">
                             {order.items && order.items.length > 0 ? order.items[0].currency : 'AED'} {(order.totalAmount || 0).toFixed(2)}

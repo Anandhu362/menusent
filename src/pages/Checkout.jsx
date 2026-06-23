@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// ✅ NEW: Imported Info icon for the softer message state
-import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle, Tag, Info } from 'lucide-react';
+// ✅ NEW: Imported Copy and ArrowRight for the fintech UI
+import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle, Tag, Info, Copy, ArrowRight } from 'lucide-react';
 
 import { placeOrder, fetchDeliveryFee, validatePromo } from '../api/order.api';
 import LocationPickerMap from '../components/LocationPickerMap';
@@ -13,6 +13,7 @@ const Checkout = () => {
 
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [fallbackSlug, setFallbackSlug] = useState(null);
+  const [copied, setCopied] = useState(false); // ✅ Added state for the copy utility
 
   // Delivery Fee States
   const [customerLocation, setCustomerLocation] = useState(null);
@@ -93,7 +94,6 @@ const Checkout = () => {
   // PROMO CODE VALIDATION LOGIC
   // ==========================================
   const handleApplyPromo = async () => {
-    // ✅ FIX: Changed type to "info" for better UX (No scary red error for missing a step)
     if (!formData.phone || formData.phone.trim() === "") {
       setPromoMessage({ type: "info", text: "Please enter your phone number in the Delivery Details below first." });
       return;
@@ -174,34 +174,55 @@ const Checkout = () => {
     } 
   };
 
+  // ✅ Added utility to copy the transaction ID
+  const handleCopyId = () => {
+    if (orderSuccess?.orderId) {
+      navigator.clipboard.writeText(orderSuccess.orderId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // ==========================================
+  // PREMIUM FINTECH UI: SUCCESS STATE
+  // ==========================================
   if (orderSuccess) {
     const targetSlug = orderSuccess.restaurantId?.slug || fallbackSlug;
 
     return (
-      <div className="min-h-screen bg-white md:bg-[#f8f9fb] font-sans md:flex md:items-center md:justify-center md:p-5">
-        <div className="w-full min-h-screen md:min-h-0 md:h-[800px] bg-white md:max-w-[400px] md:rounded-[40px] md:shadow-2xl md:border-[8px] md:border-black flex flex-col items-center justify-center text-center p-8 relative overflow-hidden animate-in fade-in zoom-in duration-500">
+      <div className="min-h-screen bg-white md:bg-gray-50 font-sans md:flex md:items-center md:justify-center md:p-5">
+        <div className="w-full min-h-screen md:min-h-0 md:h-[750px] bg-white md:max-w-[400px] md:rounded-[32px] md:shadow-xl md:border md:border-gray-100 flex flex-col items-center justify-center text-center p-8 relative overflow-hidden animate-in fade-in zoom-in duration-500">
           
-          <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-6">
-            <CheckCircle2 className="w-12 h-12 text-green-500" />
+          <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-6 border border-emerald-100">
+            <CheckCircle2 className="w-10 h-10 text-emerald-500" />
           </div>
 
-          <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">Order Placed!</h2>
-          <p className="text-slate-500 font-medium mb-10 px-4 leading-relaxed">
-            Your feast has been sent to the kitchen and is being prepared.
+          <h2 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">Order Confirmed</h2>
+          <p className="text-gray-500 font-medium mb-10 px-2 leading-relaxed text-sm">
+            Your transaction was successful. The kitchen is securely processing your request.
           </p>
 
-          <div className="bg-orange-50 w-full rounded-[24px] p-6 mb-10 border-2 border-orange-100/50 shadow-sm">
-            <p className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em] mb-2">Reference ID</p>
-            <p className="text-2xl font-black text-[#ff6b35] tracking-widest">{orderSuccess.orderId}</p>
+          <div className="bg-gray-50 w-full rounded-2xl p-5 mb-10 border border-gray-200 flex flex-col items-center relative">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Transaction Ref</p>
+            <div className="flex items-center gap-3">
+              <p className="text-xl font-mono font-bold text-gray-900 tracking-wider">{orderSuccess.orderId}</p>
+              <button 
+                onClick={handleCopyId} 
+                className="text-gray-400 hover:text-gray-700 transition-colors p-1"
+                aria-label="Copy Reference ID"
+              >
+                {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <div className="w-full space-y-4 px-2">
+          <div className="w-full space-y-3 px-2">
             <button 
               onClick={() => navigate(`/track/${orderSuccess._id}`)} 
-              className="w-full bg-[#ff6b35] text-white py-5 rounded-[20px] font-black text-[16px] shadow-[0_12px_24px_-8px_rgba(255,107,53,0.5)] hover:bg-[#ff5a1f] active:scale-[0.97] transition-all flex items-center justify-center gap-3"
+              className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold text-[15px] shadow-sm hover:bg-gray-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
             >
-              <Truck className="w-5 h-5" />
-              <span>Track My Order</span>
+              <span>Track Order Status</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
 
             <button 
@@ -212,9 +233,9 @@ const Checkout = () => {
                   navigate(-1); 
                 }
               }}
-              className="w-full py-4 text-slate-400 font-bold text-[14px] hover:text-slate-600 transition-colors"
+              className="w-full py-4 text-gray-400 font-bold text-[14px] hover:text-gray-800 transition-colors"
             >
-              Back to Menu
+              Return to Dashboard
             </button>
           </div>
         </div>
@@ -222,6 +243,9 @@ const Checkout = () => {
     );
   }
 
+  // ==========================================
+  // CHECKOUT FORM UI
+  // ==========================================
   return (
     <div className="min-h-screen bg-[#f8f9fb] font-sans md:flex md:items-center md:justify-center">
       <style>{`
@@ -240,9 +264,6 @@ const Checkout = () => {
 
         <div className="flex-1 overflow-y-auto p-5 pt-2 pb-32 hide-scrollbar">
           
-          {/* ========================================== */}
-          {/* ORDER SUMMARY */}
-          {/* ========================================== */}
           <div className="bg-white rounded-[24px] p-5 mb-6 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.04)] border border-gray-100/80">
             <h2 className="text-sm font-extrabold text-slate-900 mb-4 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-[#ff6b35]" /> Order Summary
@@ -305,9 +326,6 @@ const Checkout = () => {
             </div>
           </div>
 
-          {/* ========================================== */}
-          {/* PROMO CODE SECTION */}
-          {/* ========================================== */}
           <div className="bg-white rounded-[24px] p-5 mb-6 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.04)] border border-gray-100/80">
              <h2 className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
               <Tag className="w-4 h-4 text-[#ff6b35]" /> Apply Promo Code
@@ -347,7 +365,6 @@ const Checkout = () => {
                 </div>
              )}
              
-             {/* ✅ FIX: Dynamic styling for 'info' vs 'error' vs 'success' states */}
              {promoMessage.text && (
                 <div className={`mt-3 flex items-start gap-2 p-3 rounded-xl text-xs font-bold 
                   ${promoMessage.type === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 
