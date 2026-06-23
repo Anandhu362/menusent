@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { getRestaurantBySlug, getRestaurantOffers } from '../api/restaurant.api.js';
 
 // 1. Create the Context
 const CartContext = createContext();
@@ -21,7 +22,7 @@ export const CartProvider = ({ children }) => {
     }
   });
 
-  // ✅ NEW: Initialize DISCOUNT state from localStorage
+  // Initialize DISCOUNT state from localStorage
   const [discountData, setDiscountData] = useState(() => {
     try {
       const localPromo = localStorage.getItem('resto_promo');
@@ -31,12 +32,15 @@ export const CartProvider = ({ children }) => {
     }
   });
 
+  // Initialize state to hold fetched restaurant offers
+  const [restaurantOffers, setRestaurantOffers] = useState([]);
+
   // Sync CART to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('resto_cart', JSON.stringify(cartItems));
   }, [cartItems]);
 
-  // ✅ NEW: Sync DISCOUNT to localStorage whenever it changes
+  // Sync DISCOUNT to localStorage whenever it changes
   useEffect(() => {
     if (discountData) {
       localStorage.setItem('resto_promo', JSON.stringify(discountData));
@@ -44,6 +48,41 @@ export const CartProvider = ({ children }) => {
       localStorage.removeItem('resto_promo');
     }
   }, [discountData]);
+
+  // ✅ ROBUST FETCH: Fetch active offers for the restaurant whenever the cart changes
+  useEffect(() => {
+    const fetchOffers = async () => {
+      // Only fetch if there are items in the cart
+      if (cartItems.length > 0) {
+        try {
+          const slug = cartItems[0]?.restaurantSlug;
+          const restaurantId = cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0];
+
+          if (slug) {
+            // First try fetching by slug
+            const restaurantData = await getRestaurantBySlug(slug);
+            if (restaurantData && restaurantData.isOffersEnabled && restaurantData.offers) {
+              setRestaurantOffers(restaurantData.offers);
+            } else {
+              setRestaurantOffers([]);
+            }
+          } else if (restaurantId) {
+            // Fallback: If no slug exists in cart item, fetch by ID
+            const offersData = await getRestaurantOffers(restaurantId);
+            setRestaurantOffers(offersData || []);
+          }
+        } catch (error) {
+          console.error("Failed to fetch restaurant offers:", error);
+          setRestaurantOffers([]);
+        }
+      } else {
+        // Clear offers if the cart is emptied
+        setRestaurantOffers([]);
+      }
+    };
+
+    fetchOffers();
+  }, [cartItems]);
 
   // --- CART ACTIONS ---
 
@@ -93,25 +132,21 @@ export const CartProvider = ({ children }) => {
     );
   };
 
-  // ✅ NEW: Apply Promo Action
   const applyPromo = (promoDetails) => {
-    setDiscountData(promoDetails); // e.g., { code: 'OFFER50', percentage: 50 }
+    setDiscountData(promoDetails); 
   };
 
-  // ✅ NEW: Remove Promo Action
   const removePromo = () => {
     setDiscountData(null);
   };
 
-  // ✅ UPDATED: Empty the cart AND the promo (used after a successful checkout)
   const clearCart = () => {
     setCartItems([]);
-    setDiscountData(null); // Clear the promo state
+    setDiscountData(null); 
     localStorage.removeItem('resto_cart');
-    localStorage.removeItem('resto_promo'); // Clear promo from storage
+    localStorage.removeItem('resto_promo'); 
   };
 
-  // 3. Provide the state and actions to the rest of the app
   return (
     <CartContext.Provider 
       value={{ 
@@ -120,9 +155,10 @@ export const CartProvider = ({ children }) => {
         removeFromCart, 
         updateQuantity, 
         clearCart,
-        discountData,     // ✅ Exported
-        applyPromo,       // ✅ Exported
-        removePromo       // ✅ Exported
+        discountData,     
+        applyPromo,       
+        removePromo,
+        restaurantOffers 
       }}
     >
       {children}
@@ -130,7 +166,6 @@ export const CartProvider = ({ children }) => {
   );
 };
 
-// 4. Create a custom hook for easy access in other components
 export const useCart = () => {
   const context = useContext(CartContext);
   if (!context) {

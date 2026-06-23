@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-// ✅ NEW: Imported Copy and ArrowRight for the fintech UI
 import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle, Tag, Info, Copy, ArrowRight } from 'lucide-react';
 
 import { placeOrder, fetchDeliveryFee, validatePromo } from '../api/order.api';
@@ -13,7 +12,11 @@ const Checkout = () => {
 
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [fallbackSlug, setFallbackSlug] = useState(null);
-  const [copied, setCopied] = useState(false); // ✅ Added state for the copy utility
+  const [copied, setCopied] = useState(false); 
+
+  // ✅ NEW: Refs and state for smooth scrolling / highlighting
+  const phoneInputRef = useRef(null);
+  const [highlightPhone, setHighlightPhone] = useState(false);
 
   // Delivery Fee States
   const [customerLocation, setCustomerLocation] = useState(null);
@@ -40,19 +43,22 @@ const Checkout = () => {
   // ==========================================
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   
-  // Calculate discount dynamically if a promo is applied via context
   let discountAmount = 0;
   if (discountData && discountData.percentage) {
     discountAmount = (subtotal * discountData.percentage) / 100;
   }
 
   const vatAmount = subtotal * 0.05; 
-  // Grand Total subtracts discount before adding delivery and VAT
   const grandTotal = (subtotal - discountAmount) + vatAmount + deliveryFee;
   const cartCurrency = cartItems.length > 0 ? cartItems[0].currency : 'AED';
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    
+    // Auto-clear highlight if they start typing
+    if (e.target.name === 'phone' && highlightPhone) {
+      setHighlightPhone(false);
+    }
   };
 
   const handleLocationSelect = async (coords) => {
@@ -96,6 +102,19 @@ const Checkout = () => {
   const handleApplyPromo = async () => {
     if (!formData.phone || formData.phone.trim() === "") {
       setPromoMessage({ type: "info", text: "Please enter your phone number in the Delivery Details below first." });
+      
+      // ✅ TRIGGER SMOOTH SCROLL & HIGHLIGHT UX
+      if (phoneInputRef.current) {
+        phoneInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Small delay ensures scroll starts before focus brings up mobile keyboard
+        setTimeout(() => {
+          phoneInputRef.current.focus({ preventScroll: true });
+        }, 300);
+        
+        setHighlightPhone(true);
+        // Remove highlight after 2.5 seconds
+        setTimeout(() => setHighlightPhone(false), 2500);
+      }
       return;
     }
 
@@ -113,7 +132,6 @@ const Checkout = () => {
         phone: formData.phone
       });
 
-      // Save to global context so it persists
       applyPromo({ code: response.code, percentage: response.discountPercentage });
       setPromoInput("");
       setPromoMessage({ type: "success", text: response.message || "Promo applied successfully!" });
@@ -142,7 +160,6 @@ const Checkout = () => {
     const currentSlug = cartItems[0]?.restaurantSlug || null;
     setFallbackSlug(currentSlug);
 
-    // Payload includes the applied promo code
     const securePayload = {
       restaurantId: cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0] || null, 
       promoCode: discountData ? discountData.code : "", 
@@ -174,7 +191,6 @@ const Checkout = () => {
     } 
   };
 
-  // ✅ Added utility to copy the transaction ID
   const handleCopyId = () => {
     if (orderSuccess?.orderId) {
       navigator.clipboard.writeText(orderSuccess.orderId);
@@ -366,7 +382,7 @@ const Checkout = () => {
              )}
              
              {promoMessage.text && (
-                <div className={`mt-3 flex items-start gap-2 p-3 rounded-xl text-xs font-bold 
+                <div className={`mt-3 flex items-start gap-2 p-3 rounded-xl text-xs font-bold transition-all duration-300
                   ${promoMessage.type === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 
                     promoMessage.type === 'info' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 
                     'bg-green-50 text-green-700 border border-green-100'}`}>
@@ -406,9 +422,23 @@ const Checkout = () => {
               <input required type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Full Name" className="w-full bg-white border border-gray-200/80 rounded-[20px] py-4 pl-12 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#ff6b35]/10 focus:border-[#ff6b35] transition-all shadow-sm" />
             </div>
 
+            {/* ✅ UPDATED: Dynamic styling and ref added to the Phone Input */}
             <div className="relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <input required type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone Number" className="w-full bg-white border border-gray-200/80 rounded-[20px] py-4 pl-12 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#ff6b35]/10 focus:border-[#ff6b35] transition-all shadow-sm" />
+              <Phone className={`absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors duration-300 ${highlightPhone ? 'text-blue-500' : 'text-slate-400'}`} />
+              <input 
+                ref={phoneInputRef}
+                required 
+                type="tel" 
+                name="phone" 
+                value={formData.phone} 
+                onChange={handleChange} 
+                placeholder="Phone Number" 
+                className={`w-full bg-white border rounded-[20px] py-4 pl-12 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none transition-all duration-300 shadow-sm ${
+                  highlightPhone 
+                    ? 'border-blue-500 ring-4 ring-blue-500/30' 
+                    : 'border-gray-200/80 focus:ring-4 focus:ring-[#ff6b35]/10 focus:border-[#ff6b35]'
+                }`} 
+              />
             </div>
 
             <div className="flex gap-3">

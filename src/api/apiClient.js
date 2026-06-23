@@ -1,27 +1,30 @@
 import axios from 'axios';
 
-// Get the URL from the environment variables
+// 1. Get the raw URL from environment variables
 let envUrl = import.meta.env.VITE_API_BASE_URL || '';
 
-// Smart Clean: If the URL already ends with '/api', strip it off 
-// so it doesn't conflict with local request paths like '/api/auth/login'
-if (envUrl.endsWith('/api')) {
-  envUrl = envUrl.slice(0, -4);
-} else if (envUrl.endsWith('/api/')) {
-  envUrl = envUrl.slice(0, -5);
+// 2. Remove any accidental trailing slashes
+envUrl = envUrl.replace(/\/+$/, '');
+
+// 3. Guarantee that the base URL always ends exactly with /api
+if (!envUrl.endsWith('/api')) {
+  envUrl = `${envUrl}/api`;
 }
 
 const apiClient = axios.create({
   baseURL: envUrl,
 });
 
-// Add a request interceptor to automatically attach the JWT token
+// Request interceptor to handle tokens and fix route structures dynamically
 apiClient.interceptors.request.use(
   (config) => {
-    // 1. Grab the token from the browser's storage
-    const token = localStorage.getItem("authToken");
+    // Smart Fix: Strip accidental duplicate '/api' prefixes from individual calls
+    if (config.url && config.url.startsWith('/api')) {
+      config.url = config.url.replace(/^\/api/, '');
+    }
 
-    // 2. If a token exists, add it to the Authorization header
+    // Attach the JWT token if it exists
+    const token = localStorage.getItem("authToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

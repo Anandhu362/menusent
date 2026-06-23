@@ -98,3 +98,12 @@ export const updateOffers = async (offerData) => {
   const response = await apiClient.put('/api/restaurants/owner/offers', offerData);
   return response.data;
 };
+
+/**
+ * Fetches the active offers for a specific restaurant by its ID
+ * @param {string} restaurantId - The MongoDB ID of the restaurant
+ */
+export const getRestaurantOffers = async (restaurantId) => {
+  const response = await apiClient.get(`/api/restaurants/${restaurantId}/offers`);
+  return response.data;
+};
