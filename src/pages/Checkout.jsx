@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle, Tag, Info, Copy, ArrowRight } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, User, Building, Map, Receipt, CheckCircle2, Truck, AlertCircle, Tag, Info, Copy, ArrowRight, MessageSquare } from 'lucide-react';
 
 import { placeOrder, fetchDeliveryFee, validatePromo } from '../api/order.api';
 import LocationPickerMap from '../components/LocationPickerMap';
@@ -14,7 +14,7 @@ const Checkout = () => {
   const [fallbackSlug, setFallbackSlug] = useState(null);
   const [copied, setCopied] = useState(false); 
 
-  // ✅ NEW: Refs and state for smooth scrolling / highlighting
+  // Refs and state for smooth scrolling / highlighting
   const phoneInputRef = useRef(null);
   const [highlightPhone, setHighlightPhone] = useState(false);
 
@@ -36,6 +36,10 @@ const Checkout = () => {
     building: '',
     landmark: ''
   });
+  
+  // ✅ NEW: State for custom remarks/delivery instructions
+  const [remark, setRemark] = useState("");
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ==========================================
@@ -103,16 +107,14 @@ const Checkout = () => {
     if (!formData.phone || formData.phone.trim() === "") {
       setPromoMessage({ type: "info", text: "Please enter your phone number in the Delivery Details below first." });
       
-      // ✅ TRIGGER SMOOTH SCROLL & HIGHLIGHT UX
+      // TRIGGER SMOOTH SCROLL & HIGHLIGHT UX
       if (phoneInputRef.current) {
         phoneInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Small delay ensures scroll starts before focus brings up mobile keyboard
         setTimeout(() => {
           phoneInputRef.current.focus({ preventScroll: true });
         }, 300);
         
         setHighlightPhone(true);
-        // Remove highlight after 2.5 seconds
         setTimeout(() => setHighlightPhone(false), 2500);
       }
       return;
@@ -163,8 +165,10 @@ const Checkout = () => {
     const securePayload = {
       restaurantId: cartItems[0]?.restaurantId || cartItems[0]?.restaurantIds?.[0] || null, 
       promoCode: discountData ? discountData.code : "", 
+      remarks: remark, // ✅ NEW: Passed remarks securely
       customerDetails: {
         ...formData,
+        remarks: remark, 
         lat: customerLocation.lat,
         lng: customerLocation.lng
       },
@@ -422,7 +426,6 @@ const Checkout = () => {
               <input required type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Full Name" className="w-full bg-white border border-gray-200/80 rounded-[20px] py-4 pl-12 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#ff6b35]/10 focus:border-[#ff6b35] transition-all shadow-sm" />
             </div>
 
-            {/* ✅ UPDATED: Dynamic styling and ref added to the Phone Input */}
             <div className="relative">
               <Phone className={`absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors duration-300 ${highlightPhone ? 'text-blue-500' : 'text-slate-400'}`} />
               <input 
@@ -456,6 +459,19 @@ const Checkout = () => {
             <div className="relative">
               <Map className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <input type="text" name="landmark" value={formData.landmark} onChange={handleChange} placeholder="Landmark/Directions (Optional)" className="w-full bg-white border border-gray-200/80 rounded-[20px] py-4 pl-12 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#ff6b35]/10 focus:border-[#ff6b35] transition-all shadow-sm" />
+            </div>
+
+            {/* ✅ NEW: Special Instructions Text Area using the same fintech container aesthetic */}
+            <div className="relative pt-2">
+              <MessageSquare className="absolute left-4 top-[1.35rem] h-5 w-5 text-slate-400" />
+              <textarea 
+                name="remark" 
+                value={remark} 
+                onChange={(e) => setRemark(e.target.value)} 
+                placeholder="Delivery instructions or notes (e.g., Avoid fries, ring bell)" 
+                rows="3"
+                className="w-full bg-white border border-gray-200/80 rounded-[20px] py-4 pl-12 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-[#ff6b35]/10 focus:border-[#ff6b35] transition-all shadow-sm resize-none" 
+              />
             </div>
           </form>
 

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AdminSidebar } from "../components/AdminSidebar";
 import { useAuth } from "../context/AuthContext";
-import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer, Bluetooth, BluetoothConnected, BluetoothOff, X, RefreshCw } from "lucide-react";
+import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer, Bluetooth, BluetoothConnected, BluetoothOff, X, RefreshCw, AlertCircle } from "lucide-react";
 
 // API & Firebase
 import apiClient from "../api/apiClient";
-// ✅ Removed local initializeApp and getDatabase
 import { ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
 import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
 
@@ -273,6 +272,19 @@ const Orders = () => {
                             )}
                           </div>
                         </div>
+
+                        {/* ✅ NEW: HIGH-VISIBILITY REMARKS BLOCK FOR KITCHEN */}
+                        {order.remarks && (
+                          <div className="mb-3 p-2.5 bg-[#fff8e6] border border-[#ffe099] rounded-xl flex items-start gap-2 shadow-sm">
+                            <AlertCircle className="h-4 w-4 text-[#ff9900] mt-0.5 shrink-0" />
+                            <div className="flex-1">
+                              <span className="block text-[10px] font-black uppercase text-[#cc7a00] tracking-wider mb-0.5">Instruction</span>
+                              <p className="text-xs font-bold text-slate-800 leading-tight">
+                                {order.remarks}
+                              </p>
+                            </div>
+                          </div>
+                        )}
 
                         <div className="space-y-1 mb-3 border-t pt-2 flex-1">
                           {order.items?.map((item, idx) => (

@@ -24,7 +24,7 @@ export const fetchDeliveryFee = async (payload) => {
 
 /**
  * Places a new order from the customer checkout page.
- * @param {Object} orderData - Includes items, customer info, promo details, and restaurantId.
+ * @param {Object} orderData - Includes items, customer info, promo details, restaurantId, and remarks.
  */
 export const placeOrder = async (orderData) => {
   const response = await apiClient.post('/api/orders', orderData);
