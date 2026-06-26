@@ -1,28 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AdminSidebar } from "../components/AdminSidebar";
 import { useAuth } from "../context/AuthContext";
+import { useGlobalOrders } from "../context/OrderContext"; // <-- Import the new global state
 import { Clock, CheckCircle, Phone, MapPin, Truck, Check, Printer, Bluetooth, BluetoothConnected, BluetoothOff, X, RefreshCw, AlertCircle } from "lucide-react";
 
-// API & Firebase
 import apiClient from "../api/apiClient";
-import { ref, onChildAdded, query, orderByChild, startAt } from "firebase/database";
-import { getRestaurantOrders, updateOrderStatus } from "../api/order.api.js";
-
-// ✅ Import centralized database
-import { database } from "../utils/firebase"; 
-
-// Print Utilities
+import { updateOrderStatus } from "../api/order.api.js";
 import { useReactToPrint } from "react-to-print";
 import { ReceiptPrinter } from "../components/ReceiptPrinter";
-
-// Native Tools
 import { Capacitor } from '@capacitor/core';
-import { LocalNotifications } from '@capacitor/local-notifications';
-
-// Import the new Printer Context
 import { usePrinter } from "../context/PrinterContext";
 
-// Smart Address Formatter (Kept for UI display)
 const formatAddress = (addr) => {
   if (!addr) return "";
   if (typeof addr === "string") return addr;
@@ -41,23 +29,14 @@ const Orders = () => {
   const { user } = useAuth();
   const restaurantId = user?.restaurantId;
 
-  // Consume Printer Context variables and functions
+  // ✅ Pull orders and setOrders globally from Context instead of local state
+  const { orders, setOrders } = useGlobalOrders(); 
+
   const { 
-    btConnectionStatus, 
-    pairedDevices, 
-    showDeviceModal, 
-    setShowDeviceModal, 
-    scanForPrinters, 
-    connectToSelectedPrinter, 
-    disconnectPrinter, 
-    triggerPrint 
+    btConnectionStatus, pairedDevices, showDeviceModal, setShowDeviceModal, 
+    scanForPrinters, connectToSelectedPrinter, disconnectPrinter, triggerPrint 
   } = usePrinter();
 
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const audioRef = useRef(null);
-  
-  // Removed hardcoded IP. It will now fetch dynamically from DB.
   const [livePrinterIp, setLivePrinterIp] = useState('');
   const [restaurantPhone, setRestaurantPhone] = useState(user?.phone || '');
   const [restaurantAddress, setRestaurantAddress] = useState(user?.address || '');
@@ -78,16 +57,8 @@ const Orders = () => {
     }
   }, [orderToPrint, handleWebPrint]);
 
-  // Centralized Print Handler interacting with Context
   const handlePrintRequest = async (order) => {
-    const printMethod = await triggerPrint(order, {
-      user,
-      restaurantAddress,
-      restaurantPhone,
-      livePrinterIp
-    });
-
-    // Fallback to web print (react-to-print) if not on a native device
+    const printMethod = await triggerPrint(order, { user, restaurantAddress, restaurantPhone, livePrinterIp });
     if (printMethod === "WEB") {
       setOrderToPrint(order);
     }
@@ -95,8 +66,6 @@ const Orders = () => {
 
   useEffect(() => {
     if (!restaurantId) return;
-
-    // Fetch dynamic printer IP and restaurant details
     const fetchRestaurantDetails = async () => {
       try {
         const res = await apiClient.get('/api/restaurants/owner/profile'); 
@@ -109,59 +78,7 @@ const Orders = () => {
         console.error("Failed to fetch profile info:", error);
       }
     };
-
     fetchRestaurantDetails();
-
-    const fetchInitialOrders = async () => {
-      try {
-        const data = await getRestaurantOrders(restaurantId);
-        setOrders(data);
-      } catch (error) {
-        console.error("Failed to fetch orders:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInitialOrders();
-
-    // ✅ Updated to use the imported database variable
-    const ordersRef = ref(database, `live-orders/${restaurantId}`);
-    const now = Date.now();
-    const newOrdersQuery = query(ordersRef, orderByChild('timestamp'), startAt(now));
-
-    const unsubscribe = onChildAdded(newOrdersQuery, async (snapshot) => {
-      const newOrder = snapshot.val();
-      if (typeof newOrder._id === 'object' || typeof newOrder._id === 'undefined') return;
-
-      setOrders((prevOrders) => {
-        if (prevOrders.some(o => o._id === newOrder._id)) return prevOrders;
-
-        if (audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {});
-        }
-
-        if (Capacitor.isNativePlatform()) {
-          LocalNotifications.schedule({
-            notifications: [
-              {
-                title: "🚨 New Order Received!",
-                body: `${newOrder.customerName} just placed an order for AED ${(newOrder.totalAmount || 0).toFixed(2)}`,
-                id: Math.floor(Date.now() / 1000), 
-                schedule: { at: new Date(Date.now() + 1000) }, 
-                sound: null, 
-                actionTypeId: "",
-                extra: null
-              }
-            ]
-          });
-        }
-
-        return [newOrder, ...prevOrders];
-      });
-    });
-
-    return () => unsubscribe();
   }, [restaurantId]);
 
   const handleStatusChange = async (order, newStatus) => {
@@ -173,14 +90,10 @@ const Orders = () => {
       await updateOrderStatus(orderId, newStatus);
 
       if (newStatus === "Accepted") {
-        console.log(`👉 Order ${order.orderId} Accepted! Triggering print...`);
         handlePrintRequest({ ...order, orderStatus: newStatus });
       }
-
     } catch (error) {
       console.error("Failed to update status:", error);
-      const data = await getRestaurantOrders(restaurantId);
-      setOrders(data);
     }
   };
 
@@ -198,17 +111,12 @@ const Orders = () => {
 
   return (
     <div className="flex h-screen bg-[#f8f9fb] font-sans relative">
-      
       <ReceiptPrinter ref={printComponentRef} order={orderToPrint} restaurant={user} />
-      <audio ref={audioRef} src="/notification.mp3" preload="auto" className="hidden" />
       <AdminSidebar />
       
       <main className="flex-1 h-full overflow-y-auto relative z-10">
-        
-        {/* HEADER WITH DYNAMIC BLUETOOTH BUTTON */}
         <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <h2 className="text-2xl font-bold text-slate-900">Live Orders</h2>
-          
           {Capacitor.isNativePlatform() && (
             <button 
               onClick={btConnectionStatus === "Connected" ? disconnectPrinter : scanForPrinters}
@@ -224,7 +132,6 @@ const Orders = () => {
               {btConnectionStatus === "Connected" && <BluetoothConnected className="h-5 w-5" />}
               {btConnectionStatus.includes("ing") && <RefreshCw className="h-5 w-5 animate-spin" />}
               {btConnectionStatus === "Disconnected" && <BluetoothOff className="h-5 w-5" />}
-              
               <span>
                 {btConnectionStatus === "Connected" ? "Disconnect Printer" : 
                  btConnectionStatus === "Scanning..." ? "Scanning..." : 
@@ -273,15 +180,12 @@ const Orders = () => {
                           </div>
                         </div>
 
-                        {/* ✅ NEW: HIGH-VISIBILITY REMARKS BLOCK FOR KITCHEN */}
                         {order.remarks && (
                           <div className="mb-3 p-2.5 bg-[#fff8e6] border border-[#ffe099] rounded-xl flex items-start gap-2 shadow-sm">
                             <AlertCircle className="h-4 w-4 text-[#ff9900] mt-0.5 shrink-0" />
                             <div className="flex-1">
                               <span className="block text-[10px] font-black uppercase text-[#cc7a00] tracking-wider mb-0.5">Instruction</span>
-                              <p className="text-xs font-bold text-slate-800 leading-tight">
-                                {order.remarks}
-                              </p>
+                              <p className="text-xs font-bold text-slate-800 leading-tight">{order.remarks}</p>
                             </div>
                           </div>
                         )}
@@ -294,7 +198,6 @@ const Orders = () => {
                           ))}
                         </div>
 
-                        {/* ✅ PROMO TAG CONDITIONAL RENDERING */}
                         {order.appliedPromoCode && (
                           <div className="flex items-center gap-1 bg-green-50 text-emerald-600 px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wide mb-3 border border-green-100 w-fit">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-tag"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
@@ -308,11 +211,7 @@ const Orders = () => {
                           </span>
                           
                           <div className="flex gap-1 items-center">
-                            <button 
-                              onClick={() => handlePrintRequest(order)}
-                              title="Print Receipt"
-                              className="p-1.5 rounded-lg text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors mr-1"
-                            >
+                            <button onClick={() => handlePrintRequest(order)} className="p-1.5 rounded-lg text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors mr-1">
                               <Printer className="h-4 w-4" />
                             </button>
 
@@ -339,8 +238,8 @@ const Orders = () => {
           </div>
         </div>
       </main>
-
-      {/* 📱 BLUETOOTH DEVICE SELECTOR MODAL */}
+      
+      {/* Bluetooth Modal kept exactly the same */}
       {showDeviceModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">

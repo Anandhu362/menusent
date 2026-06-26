@@ -38,6 +38,7 @@ import apiClient from "./api/apiClient";
 // Context Providers
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext"; 
+import { OrderProvider } from "./context/OrderContext"; // ✅ NEW: Imported OrderProvider
 
 // Import the Printer Provider
 import { PrinterProvider } from "./context/PrinterContext"; 
@@ -119,123 +120,126 @@ function App() {
       <OfflineOverlay />
 
       <AuthProvider>
-        {/* Wrap the app with PrinterProvider here so hardware connection survives page reloads/routing */}
-        <PrinterProvider>
-          <CartProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* --- Public Landing --- */}
-                <Route 
-                  path="/" 
-                  element={
-                    Capacitor.isNativePlatform() 
-                      ? <Navigate to="/login" replace /> 
-                      : <Home />
-                  } 
-                />
-                
-                {/* --- Authentication --- */}
-                <Route path="/login" element={<Login />} />
-                
-                {/* --- Protected Restaurant Owner & Staff Routes --- */}
-                
-                {/* Waiter POS Tablet Route */}
-                <Route 
-                  path="/pos/:slug" 
-                  element={
-                    <ProtectedRoute allowedRoles={['admin', 'waiter']}>
-                      <WaiterTablet />
-                    </ProtectedRoute>
-                  } 
-                />
+        {/* ✅ NEW: Wrap the app with OrderProvider here so order tracking/beeping is global */}
+        <OrderProvider>
+          {/* Wrap the app with PrinterProvider here so hardware connection survives page reloads/routing */}
+          <PrinterProvider>
+            <CartProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* --- Public Landing --- */}
+                  <Route 
+                    path="/" 
+                    element={
+                      Capacitor.isNativePlatform() 
+                        ? <Navigate to="/login" replace /> 
+                        : <Home />
+                    } 
+                  />
+                  
+                  {/* --- Authentication --- */}
+                  <Route path="/login" element={<Login />} />
+                  
+                  {/* --- Protected Restaurant Owner & Staff Routes --- */}
+                  
+                  {/* Waiter POS Tablet Route */}
+                  <Route 
+                    path="/pos/:slug" 
+                    element={
+                      <ProtectedRoute allowedRoles={['admin', 'waiter']}>
+                        <WaiterTablet />
+                      </ProtectedRoute>
+                    } 
+                  />
 
-                <Route 
-                  path="/restaurant/dashboard" 
-                  element={
-                    <ProtectedRoute>
-                      <RestaurantDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
+                  <Route 
+                    path="/restaurant/dashboard" 
+                    element={
+                      <ProtectedRoute>
+                        <RestaurantDashboard />
+                      </ProtectedRoute>
+                    } 
+                  />
 
-                <Route 
-                  path="/restaurant/profile" 
-                  element={
-                    <ProtectedRoute>
-                      <OwnerProfile />
-                    </ProtectedRoute>
-                  } 
-                />
+                  <Route 
+                    path="/restaurant/profile" 
+                    element={
+                      <ProtectedRoute>
+                        <OwnerProfile />
+                      </ProtectedRoute>
+                    } 
+                  />
 
-                <Route 
-                  path="/restaurant/orders" 
-                  element={
-                    <ProtectedRoute>
-                      <Orders />
-                    </ProtectedRoute>
-                  } 
-                />
+                  <Route 
+                    path="/restaurant/orders" 
+                    element={
+                      <ProtectedRoute>
+                        <Orders />
+                      </ProtectedRoute>
+                    } 
+                  />
 
-                <Route 
-                  path="/restaurant/menu-management" 
-                  element={
-                    <ProtectedRoute>
-                      <MenuManagement />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/restaurant/tables" 
-                  element={
-                    <ProtectedRoute>
-                      <TableManagement />
-                    </ProtectedRoute>
-                  } 
-                /> 
-                
-                {/* ✅ NEW: Table Order View Route */}
-                <Route 
-                  path="/restaurant/tables/:tableId/order" 
-                  element={
-                    <ProtectedRoute>
-                      <TableOrderView />
-                    </ProtectedRoute>
-                  } 
-                /> 
-                
-                <Route 
-                  path="/restaurant/settings" 
-                  element={
-                    <ProtectedRoute>
-                      <RestaurantSettings />
-                    </ProtectedRoute>
-                  } 
-                />
+                  <Route 
+                    path="/restaurant/menu-management" 
+                    element={
+                      <ProtectedRoute>
+                        <MenuManagement />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/restaurant/tables" 
+                    element={
+                      <ProtectedRoute>
+                        <TableManagement />
+                      </ProtectedRoute>
+                    } 
+                  /> 
+                  
+                  {/* ✅ NEW: Table Order View Route */}
+                  <Route 
+                    path="/restaurant/tables/:tableId/order" 
+                    element={
+                      <ProtectedRoute>
+                        <TableOrderView />
+                      </ProtectedRoute>
+                    } 
+                  /> 
+                  
+                  <Route 
+                    path="/restaurant/settings" 
+                    element={
+                      <ProtectedRoute>
+                        <RestaurantSettings />
+                      </ProtectedRoute>
+                    } 
+                  />
 
-                <Route 
-                  path="/admin" 
-                  element={
-                    <ProtectedRoute>
-                      <Admin />
-                    </ProtectedRoute>
-                  } 
-                />
+                  <Route 
+                    path="/admin" 
+                    element={
+                      <ProtectedRoute>
+                        <Admin />
+                      </ProtectedRoute>
+                    } 
+                  />
 
-                {/* --- Public Customer Experience Routes --- */}
-                
-                {/* Public Order Tracking route (Mobile Optimized) */}
-                <Route path="/track/:orderId" element={<OrderTracking />} />
+                  {/* --- Public Customer Experience Routes --- */}
+                  
+                  {/* Public Order Tracking route (Mobile Optimized) */}
+                  <Route path="/track/:orderId" element={<OrderTracking />} />
 
-                <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/checkout" element={<Checkout />} />
 
-                <Route path="/:slug/menu" element={<RestaurantMenu />} />
+                  <Route path="/:slug/menu" element={<RestaurantMenu />} />
 
-                <Route path="/:slug" element={<MenuExperience />} />
-              </Routes>
-            </BrowserRouter>
-          </CartProvider>
-        </PrinterProvider>
+                  <Route path="/:slug" element={<MenuExperience />} />
+                </Routes>
+              </BrowserRouter>
+            </CartProvider>
+          </PrinterProvider>
+        </OrderProvider>
       </AuthProvider>
     </div>
   );
